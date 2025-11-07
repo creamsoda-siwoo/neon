@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF--8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>네온 서바이버 (Neon Survivor)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Orbitron', sans-serif;
+      overflow: hidden;
+      background-color: #0d0221;
+      color: white;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 1rem;
+    }
+    .game-container {
+      background: #0a0a1f;
+      border: 2px solid #00ffff;
+      box-shadow: 0 0 20px #00ffff, inset 0 0 20px #00ffff;
+    }
+    #game-canvas {
+      background-color: #0d0221;
+      cursor: none;
+    }
+    .text-glow {
+      color: #fff;
+      text-shadow: 0 0 7px #fff, 0 0 10px #fff, 0 0 21px #ff00ff, 0 0 42px #ff00ff;
+    }
+    .button-retro {
+      background-color: transparent;
+      border: 2px solid #fff;
+      color: #fff;
+      padding: 0.75rem 1.5rem;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      transition: all 0.2s ease-in-out;
+      text-shadow: 0 0 8px #ff00ff;
+      cursor: pointer;
+    }
+    .button-retro:hover {
+      background-color: #fff;
+      color: #0d0221;
+      box-shadow: 0 0 20px #fff, 0 0 30px #ff00ff;
+    }
+    .upgrade-card {
+      border: 2px solid #00ffff;
+      background: rgba(13, 2, 33, 0.8);
+      transition: all 0.2s ease-in-out;
+      cursor: pointer;
+    }
+    .upgrade-card:hover {
+      background: rgba(0, 255, 255, 0.2);
+      box-shadow: 0 0 15px #00ffff;
+      transform: translateY(-5px);
+    }
+    .overlay {
+        position: absolute;
+        inset: 0;
+        background-color: rgba(0,0,0,0.7);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        z-index: 10;
+        padding: 2rem;
+    }
+    .hidden {
+        display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <main class="flex flex-col items-center">
+    <div class="flex justify-between w-full mb-2 px-2 text-glow">
+        <div id="level-ui" class="text-xl">레벨: 1</div>
+        <div id="timer-ui" class="text-2xl font-bold">00:00</div>
+        <div id="highscore-ui" class="text-xl">최고기록: 00:00</div>
+    </div>
+    
+    <div class="w-full h-8 mb-2 flex flex-col justify-around">
+        <div class="w-full bg-gray-700 h-3 rounded-full overflow-hidden border border-red-500">
+            <div id="hp-bar" class="bg-red-500 h-full" style="width: 100%"></div>
+        </div>
+        <div class="w-full bg-gray-700 h-3 rounded-full overflow-hidden border border-cyan-400">
+            <div id="xp-bar" class="bg-cyan-400 h-full" style="width: 0%"></div>
+        </div>
+    </div>
+
+    <div id="game-wrapper" class="relative rounded-lg overflow-hidden game-container" style="width: 800px; height: 600px;">
+      <canvas id="game-canvas" width="800" height="600"></canvas>
+      
+      <div id="start-screen" class="overlay">
+          <h1 class="text-6xl font-bold mb-4 text-glow">네온 서바이버</h1>
+          <p class="text-xl mb-8">마우스로 이동하여 생존하세요. 공격은 자동입니다.</p>
+          <button id="start-button" class="button-retro">시작</button>
+      </div>
+
+      <div id="pause-screen" class="overlay hidden">
+          <h2 class="text-6xl font-bold mb-4 text-glow">일시정지</h2>
+          <p class="text-xl">Esc 키를 눌러 계속하세요</p>
+      </div>
+
+      <div id="levelup-screen" class="overlay hidden">
+          <h2 class="text-5xl font-bold mb-8 text-glow">레벨 업!</h2>
+          <div id="levelup-options" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <!-- Upgrade cards will be injected here -->
+          </div>
+      </div>
+
+      <div id="gameover-screen" class="overlay hidden">
+          <h2 class="text-6xl font-bold mb-4 text-glow">게임 오버</h2>
+          <p id="gameover-time" class="text-3xl mb-2">생존 시간: 00:00</p>
+          <p id="gameover-highscore" class="text-xl mb-8">최고 기록: 00:00</p>
+          <button id="restart-button" class="button-retro">다시 시작</button>
+      </div>
+    </div>
+  </main>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM Elements ---
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const startScreen = document.getElementById('start-screen');
+    const pauseScreen = document.getElementById('pause-screen');
+    const levelUpScreen = document.getElementById('levelup-screen');
+    const gameOverScreen = document.getElementById('gameover-screen');
+    const startButton = document.getElementById('start-button');
+    const restartButton = document.getElementById('restart-button');
+    const levelUpOptionsContainer = document.getElementById('levelup-options');
+
+    // UI Elements
+    const levelUI = document.getElementById('level-ui');
+    const timerUI = document.getElementById('timer-ui');
+    const highscoreUI = document.getElementById('highscore-ui');
+    const hpBar = document.getElementById('hp-bar');
+    const xpBar = document.getElementById('xp-bar');
+    const gameOverTimeUI = document.getElementById('gameover-time');
+    const gameOverHighscoreUI = document.getElementById('gameover-highscore');
+
+    // --- Game Constants ---
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+    const PLAYER_SIZE = 20;
+    const INITIAL_HP = 100;
+
+    // --- Audio ---
+    let audioContext;
+    try {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) {
+        console.error("Web Audio API is not supported in this browser");
+    }
+
+    function playSound(type, frequency, duration, volume = 0.3) {
+        if (!audioContext) return;
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.type = type;
+        oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + duration);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+    }
+
+    const sounds = {
+        hit: () => playSound('square', 150, 0.1, 0.2),
+        shoot: () => playSound('triangle', 440, 0.05, 0.1),
+        xp: () => playSound('sine', 600, 0.1),
+        levelUp: () => playSound('sine', 880, 0.4),
+        heal: () => playSound('sine', 700, 0.3),
+        dash: () => playSound('sine', 300, 0.2, 0.4),
+        explosion: () => playSound('sine', 50, 0.3, 0.5)
+    };
+    
+    // --- Game State ---
+    let gameState = 'start';
+    let isPaused = false;
+    let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, explosions, orbitalShields;
+    let timer, gameTime, lastTime, animationFrameId;
+    let mousePos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+    let highScore = Number(localStorage.getItem('neonSurvivorHighScore') || 0);
+
+    // --- Upgrades ---
+    const UPGRADES = [
+        { id: 'firerate', title: "기관총", description: "공격 속도 20% 증가", apply: p => p.fireRate *= 0.8 },
+        { id: 'damage', title: "강화 탄환", description: "공격력 25% 증가", apply: p => p.projectileDamage *= 1.25 },
+        { id: 'multishot', title: "멀티샷", description: "발사체 수 +1", apply: p => p.projectiles++ },
+        { id: 'hp', title: "나노 수리봇", description: "최대 체력 20 증가 및 모두 회복", apply: p => { p.maxHp += 20; p.hp = p.maxHp; } },
+        { id: 'speed', title: "고속 추진기", description: "이동 속도 10% 증가", apply: p => p.speed *= 1.1 },
+        { id: 'shield', title: '궤도 방패', description: '주위를 도는 방패 추가', apply: p => p.shields++ },
+        { id: 'explosive', title: '폭발탄', description: '탄환이 명중 시 폭발합니다', apply: p => p.explosiveProjectiles = true },
+        { id: 'magnet', title: '경험치 자석', description: '경험치 획득 범위 50% 증가', apply: p => p.pickupRadius *= 1.5 },
+    ];
+    let availableUpgrades = [...UPGRADES];
+    
+    function createInitialPlayer() {
+        return {
+            x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2,
+            hp: INITIAL_HP, maxHp: INITIAL_HP,
+            xp: 0, level: 1, xpToNextLevel: 10,
+            fireRate: 500, projectiles: 1, projectileDamage: 10,
+            lastShotTime: 0, speed: 3, pickupRadius: 75,
+            dashCooldown: 2000, lastDashTime: 0, isDashing: false, dashDuration: 150, dashSpeed: 10,
+            shields: 0, explosiveProjectiles: false,
+        };
+    }
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function init() {
+        highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
+        startButton.onclick = startGame;
+        restartButton.onclick = startGame;
+
+        window.addEventListener('keydown', e => {
+            if (e.key === "Escape" && gameState === 'playing') {
+                isPaused = !isPaused;
+                pauseScreen.classList.toggle('hidden', !isPaused);
+            }
+            if (e.code === 'Space' && gameState === 'playing' && !isPaused) {
+                const now = performance.now();
+                if (now - player.lastDashTime > player.dashCooldown) {
+                    player.isDashing = true;
+                    player.lastDashTime = now;
+                    sounds.dash();
+                    setTimeout(() => player.isDashing = false, player.dashDuration);
+                }
+            }
+        });
+        window.addEventListener('mousemove', e => {
+            const rect = canvas.getBoundingClientRect();
+            mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        });
+    }
+
+    function startGame() {
+        player = createInitialPlayer();
+        enemies = [];
+        projectiles = [];
+        enemyProjectiles = [];
+        xpGems = [];
+        healthPacks = [];
+        explosions = [];
+        orbitalShields = [];
+        availableUpgrades = [...UPGRADES];
+
+        timer = 0;
+        gameTime = 0;
+        lastTime = performance.now();
+        gameState = 'playing';
+        isPaused = false;
+
+        startScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        levelUpScreen.classList.add('hidden');
+        pauseScreen.classList.add('hidden');
+        
+        updateUI();
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        gameLoop(performance.now());
+    }
+
+    function update(deltaTime) {
+        if (isPaused || gameState !== 'playing') return;
+        gameTime += deltaTime;
+        timer = Math.floor(gameTime / 1000);
+
+        // Player Movement
+        const dx = mousePos.x - player.x;
+        const dy = mousePos.y - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        let currentSpeed = player.isDashing ? player.dashSpeed : player.speed;
+        if (dist > 1) {
+            player.x += (dx / dist) * currentSpeed;
+            player.y += (dy / dist) * currentSpeed;
+        }
+        player.x = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_WIDTH - PLAYER_SIZE / 2, player.x));
+        player.y = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_HEIGHT - PLAYER_SIZE / 2, player.y));
+        
+        // Spawning
+        spawnEnemies();
+
+        // Updates
+        updateEnemies(deltaTime);
+        updateProjectiles(deltaTime);
+        updateXPGems();
+        updateExplosions(deltaTime);
+        updateOrbitalShields(deltaTime);
+
+        // Collisions
+        handleCollisions();
+
+        if (player.hp <= 0) {
+            if (timer > highScore) {
+                highScore = timer;
+                localStorage.setItem('neonSurvivorHighScore', timer);
+            }
+            gameState = 'gameOver';
+            showGameOverScreen();
+        }
+
+        if (player.xp >= player.xpToNextLevel) {
+            handleLevelUp();
+        }
+        
+        updateUI();
+    }
+    
+    function draw() {
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        ctx.shadowBlur = 10;
+
+        // Draw Health Packs
+        healthPacks.forEach(pack => {
+            ctx.font = `20px sans-serif`;
+            ctx.fillStyle = '#FF4444'; ctx.shadowColor = '#FF4444';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText('+', pack.x, pack.y);
+        });
+
+        // Draw XP Gems
+        xpGems.forEach(gem => {
+            ctx.beginPath(); ctx.arc(gem.x, gem.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#39FF14'; ctx.shadowColor = '#39FF14';
+            ctx.fill();
+        });
+
+        // Draw Player
+        ctx.fillStyle = player.isDashing ? '#FFFFFF' : '#00FFFF';
+        ctx.shadowColor = player.isDashing ? '#FFFFFF' : '#00FFFF';
+        ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
+
+        // Draw Orbital Shields
+        orbitalShields.forEach(s => {
+            ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
+            ctx.fillStyle = s.color; ctx.shadowColor = s.color;
+            ctx.fill();
+        });
+
+        // Draw Enemies
+        enemies.forEach(e => {
+            ctx.fillStyle = e.color; ctx.shadowColor = e.color;
+            ctx.fillRect(e.x - e.size / 2, e.y - e.size / 2, e.size, e.size);
+        });
+
+        // Draw Projectiles
+        projectiles.forEach(p => {
+            ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF'; ctx.shadowColor = '#FFFFFF';
+            ctx.fill();
+        });
+        enemyProjectiles.forEach(p => {
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = p.color; ctx.shadowColor = p.color;
+            ctx.fill();
+        });
+
+        // Draw Explosions
+        explosions.forEach(exp => {
+            ctx.beginPath(); ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 0, ${exp.alpha})`;
+            ctx.fill();
+        });
+
+        ctx.shadowBlur = 0;
+    }
+    
+    function gameLoop(timestamp) {
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
+
+        update(deltaTime);
+        draw();
+        
+        animationFrameId = requestAnimationFrame(gameLoop);
+    }
+    
+    function updateUI(){
+        levelUI.textContent = `레벨: ${player.level}`;
+        timerUI.textContent = formatTime(timer);
+        highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
+        hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
+        xpBar.style.width = `${(player.xp / player.xpToNextLevel) * 100}%`;
+    }
+
+    // --- Entity Update & Spawning ---
+
+    function spawnEnemies() {
+        const spawnRate = 1 - (gameTime / 1000) * 0.01;
+        if (Math.random() > Math.max(0.1, spawnRate)) return;
+
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        if (side === 0) { x = -20; y = Math.random() * CANVAS_HEIGHT; }
+        else if (side === 1) { x = CANVAS_WIDTH + 20; y = Math.random() * CANVAS_HEIGHT; }
+        else if (side === 2) { x = Math.random() * CANVAS_WIDTH; y = -20; }
+        else { x = Math.random() * CANVAS_WIDTH; y = CANVAS_HEIGHT + 20; }
+
+        const typeChance = Math.random();
+        let enemy;
+        if (timer > 120 && !enemies.some(e => e.isBoss)) {
+            // Spawn Boss
+            enemy = { id: Date.now(), x, y, size: 80, speed: 0.8, hp: 5000, maxHp: 5000, color: '#FF0000', type: 'boss', isBoss: true, lastAttack: 0, attackCooldown: 2000 };
+        } else if (typeChance < 0.2 && timer > 30) {
+            // Shooter
+            enemy = { id: Date.now(), x, y, size: 25, speed: 1, hp: 30, color: '#FFFF00', type: 'shooter', lastAttack: 0, attackCooldown: 3000 };
+        } else if (typeChance < 0.5 && timer > 60) {
+            // Tank
+            enemy = { id: Date.now(), x, y, size: 30, speed: 0.8, hp: 100, color: '#FF00FF', type: 'tank' };
+        } else {
+            // Grunt
+            enemy = { id: Date.now(), x, y, size: 20, speed: 1.5, hp: 20, color: '#FF5733', type: 'grunt' };
+        }
+        enemies.push(enemy);
+    }
+
+    function updateEnemies() {
+        enemies.forEach(e => {
+            const dx = player.x - e.x;
+            const dy = player.y - e.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            
+            if (e.type === 'shooter') {
+                if (dist > 250) { // Move towards player if far
+                    e.x += (dx / dist) * e.speed;
+                    e.y += (dy / dist) * e.speed;
+                }
+                // Attack
+                const now = performance.now();
+                if (now - e.lastAttack > e.attackCooldown) {
+                    e.lastAttack = now;
+                    enemyProjectiles.push({ x: e.x, y: e.y, dx: (dx/dist)*3, dy: (dy/dist)*3, size: 8, color: '#FFFF00' });
+                }
+            } else {
+                e.x += (dx / dist) * e.speed;
+                e.y += (dy / dist) * e.speed;
+            }
+        });
+    }
+
+    function updateProjectiles(deltaTime) {
+        // Player projectiles
+        const now = performance.now();
+        if (now - player.lastShotTime > player.fireRate && enemies.length > 0) {
+            player.lastShotTime = now;
+            let nearestEnemy = null, minDistance = Infinity;
+            enemies.forEach(e => {
+                const dist = Math.sqrt((e.x - player.x)**2 + (e.y - player.y)**2);
+                if (dist < minDistance) { minDistance = dist; nearestEnemy = e; }
+            });
+            
+            if (nearestEnemy) {
+                sounds.shoot();
+                for (let i = 0; i < player.projectiles; i++) {
+                    const angleOffset = (i - (player.projectiles - 1) / 2) * 0.2;
+                    const dx = nearestEnemy.x - player.x;
+                    const dy = nearestEnemy.y - player.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    const dirX = dx / dist; const dirY = dy / dist;
+                    const rotatedDirX = dirX * Math.cos(angleOffset) - dirY * Math.sin(angleOffset);
+                    const rotatedDirY = dirX * Math.sin(angleOffset) + dirY * Math.cos(angleOffset);
+                    projectiles.push({ x: player.x, y: player.y, dx: rotatedDirX * 7, dy: rotatedDirY * 7 });
+                }
+            }
+        }
+        projectiles.forEach(p => { p.x += p.dx; p.y += p.dy; });
+        projectiles = projectiles.filter(p => p.x > 0 && p.x < CANVAS_WIDTH && p.y > 0 && p.y < CANVAS_HEIGHT);
+
+        // Enemy projectiles
+        enemyProjectiles.forEach(p => { p.x += p.dx; p.y += p.dy; });
+        enemyProjectiles = enemyProjectiles.filter(p => p.x > 0 && p.x < CANVAS_WIDTH && p.y > 0 && p.y < CANVAS_HEIGHT);
+    }
+
+    function updateXPGems() {
+        xpGems.forEach(gem => {
+            const dx = player.x - gem.x;
+            const dy = player.y - gem.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < player.pickupRadius) {
+                gem.x += (dx/dist) * 4;
+                gem.y += (dy/dist) * 4;
+            }
+        });
+    }
+
+    function updateExplosions(deltaTime) {
+        explosions.forEach(exp => {
+            exp.duration -= deltaTime;
+            exp.alpha = exp.duration / 200;
+        });
+        explosions = explosions.filter(exp => exp.duration > 0);
+    }
+
+    function updateOrbitalShields(deltaTime) {
+        if(player.shields > orbitalShields.length) {
+            orbitalShields.push({ angle: 0, radius: 50, size: 10, damage: 15, color: '#00FFFF', lastHitTime: 0 });
+        }
+        orbitalShields.forEach((shield, i) => {
+            shield.angle += 0.05;
+            const baseAngle = (2 * Math.PI / orbitalShields.length) * i;
+            shield.x = player.x + Math.cos(shield.angle + baseAngle) * shield.radius;
+            shield.y = player.y + Math.sin(shield.angle + baseAngle) * shield.radius;
+        });
+    }
+
+    // --- Collision Detection ---
+    function handleCollisions() {
+        // Projectiles vs Enemies
+        projectiles = projectiles.filter(p => {
+            for (const e of enemies) {
+                if (Math.sqrt((p.x - e.x)**2 + (p.y - e.y)**2) < e.size / 2 + 5) {
+                    sounds.hit();
+                    e.hp -= player.projectileDamage;
+                    if (player.explosiveProjectiles) {
+                        explosions.push({ x: p.x, y: p.y, radius: 50, duration: 200, alpha: 1, damage: player.projectileDamage / 2 });
+                        sounds.explosion();
+                    }
+                    return false; // remove projectile
+                }
+            }
+            return true;
+        });
+
+        // Explosions vs Enemies
+        explosions.forEach(exp => {
+            enemies.forEach(e => {
+                if (Math.sqrt((exp.x - e.x)**2 + (exp.y - e.y)**2) < e.size / 2 + exp.radius) {
+                    e.hp -= exp.damage * (exp.alpha); // damage based on alpha
+                }
+            });
+        });
+
+        // Orbital Shields vs Enemies
+        const now = performance.now();
+        orbitalShields.forEach(s => {
+            if (now - s.lastHitTime < 500) return; // Cooldown per shield
+            for (const e of enemies) {
+                 if (Math.sqrt((s.x - e.x)**2 + (s.y - e.y)**2) < e.size / 2 + s.size / 2) {
+                    sounds.hit();
+                    e.hp -= s.damage;
+                    s.lastHitTime = now;
+                    break; // shield hits one enemy at a time
+                 }
+            }
+        });
+
+        // Dead enemies
+        let newXpGems = [], newHealthPacks = [];
+        enemies = enemies.filter(e => {
+            if (e.hp <= 0) {
+                const value = e.isBoss ? 100 : (e.type === 'tank' ? 10 : (e.type === 'shooter' ? 5 : 2));
+                newXpGems.push({ x: e.x, y: e.y, value });
+                if (Math.random() < 0.05) newHealthPacks.push({ x: e.x, y: e.y });
+                return false;
+            }
+            return true;
+        });
+        xpGems.push(...newXpGems);
+        healthPacks.push(...newHealthPacks);
+
+        // Player vs Enemies & Enemy Projectiles
+        if (!player.isDashing) {
+            enemies.forEach(e => {
+                if (Math.sqrt((player.x - e.x)**2 + (player.y - e.y)**2) < PLAYER_SIZE / 2 + e.size / 2) {
+                    player.hp -= 10;
+                }
+            });
+            enemyProjectiles = enemyProjectiles.filter(p => {
+                if (Math.sqrt((player.x - p.x)**2 + (player.y - p.y)**2) < PLAYER_SIZE / 2 + p.size / 2) {
+                    player.hp -= 15; return false;
+                }
+                return true;
+            });
+        }
+        
+        // Player vs Items
+        xpGems = xpGems.filter(gem => {
+            if (Math.sqrt((player.x - gem.x)**2 + (player.y - gem.y)**2) < PLAYER_SIZE / 2) {
+                sounds.xp(); player.xp += gem.value; return false;
+            }
+            return true;
+        });
+        healthPacks = healthPacks.filter(pack => {
+            if (Math.sqrt((player.x - pack.x)**2 + (player.y - pack.y)**2) < PLAYER_SIZE / 2) {
+                sounds.heal(); player.hp = Math.min(player.maxHp, player.hp + 20); return false;
+            }
+            return true;
+        });
+    }
+
+    // --- Game Flow ---
+
+    function handleLevelUp() {
+        sounds.levelUp();
+        gameState = 'levelUp';
+        player.xp -= player.xpToNextLevel;
+        player.level++;
+        player.xpToNextLevel = Math.floor(player.xpToNextLevel * 1.5);
+        
+        levelUpOptionsContainer.innerHTML = '';
+        const shuffled = availableUpgrades.sort(() => 0.5 - Math.random());
+        const options = shuffled.slice(0, 3);
+        
+        options.forEach(opt => {
+            const card = document.createElement('div');
+            card.className = 'upgrade-card p-6 rounded-lg text-left w-64';
+            card.innerHTML = `<h3 class="text-2xl font-bold text-cyan-300 mb-2">${opt.title}</h3><p class="text-lg">${opt.description}</p>`;
+            card.onclick = () => selectUpgrade(opt);
+            levelUpOptionsContainer.appendChild(card);
+        });
+        levelUpScreen.classList.remove('hidden');
+    }
+
+    function selectUpgrade(upgrade) {
+        upgrade.apply(player);
+        if(upgrade.id === 'shield' || upgrade.id === 'explosive') {
+            availableUpgrades = availableUpgrades.filter(u => u.id !== upgrade.id); // Remove non-stackable
+        }
+        gameState = 'playing';
+        levelUpScreen.classList.add('hidden');
+    }
+    
+    function showGameOverScreen() {
+        gameOverTimeUI.textContent = `생존 시간: ${formatTime(timer)}`;
+        gameOverHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
+        gameOverScreen.classList.remove('hidden');
+    }
+
+    // --- Initialize ---
+    init();
+});
+</script>
+</body>
+</html>
