@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF--8" />
+  <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>네온 서바이버 (Neon Survivor)</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
@@ -45,10 +45,24 @@
       text-shadow: 0 0 8px #ff00ff;
       cursor: pointer;
     }
-    .button-retro:hover {
+    .button-retro:hover:not(:disabled) {
       background-color: #fff;
       color: #0d0221;
       box-shadow: 0 0 20px #fff, 0 0 30px #ff00ff;
+    }
+    .button-retro:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+    .selection-button {
+        border-width: 2px;
+        border-color: #fff;
+        background-color: transparent;
+    }
+    .selection-button.selected {
+        background-color: #00ffff;
+        color: #0d0221;
+        box-shadow: 0 0 20px #00ffff;
     }
     .upgrade-card {
       border: 2px solid #00ffff;
@@ -64,7 +78,7 @@
     .overlay {
         position: absolute;
         inset: 0;
-        background-color: rgba(0,0,0,0.7);
+        background-color: rgba(0,0,0,0.85);
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -82,7 +96,9 @@
 
   <main class="flex flex-col items-center">
     <div class="flex justify-between w-full mb-2 px-2 text-glow">
-        <div id="level-ui" class="text-xl">레벨: 1</div>
+        <div class="flex gap-4">
+            <div id="level-ui" class="text-xl">레벨: 1</div>
+        </div>
         <div id="timer-ui" class="text-2xl font-bold">00:00</div>
         <div id="highscore-ui" class="text-xl">최고기록: 00:00</div>
     </div>
@@ -98,16 +114,35 @@
 
     <div id="game-wrapper" class="relative rounded-lg overflow-hidden game-container" style="width: 800px; height: 600px;">
       <canvas id="game-canvas" width="800" height="600"></canvas>
+      <button id="pause-button" class="absolute top-2 right-2 text-2xl w-12 h-12 button-retro hidden items-center justify-center" style="padding: 0;">||</button>
       
       <div id="start-screen" class="overlay">
-          <h1 class="text-6xl font-bold mb-4 text-glow">네온 서바이버</h1>
-          <p class="text-xl mb-8">마우스로 이동하여 생존하세요. 공격은 자동입니다.</p>
-          <button id="start-button" class="button-retro">시작</button>
+          <h1 class="text-6xl font-bold mb-8 text-glow">네온 서바이버</h1>
+          
+          <div class="mb-6">
+              <h2 class="text-2xl mb-3 text-glow">난이도 선택</h2>
+              <div id="difficulty-selection" class="flex justify-center gap-4">
+                  <button class="button-retro selection-button" data-difficulty="쉬움">쉬움</button>
+                  <button class="button-retro selection-button" data-difficulty="보통">보통</button>
+                  <button class="button-retro selection-button" data-difficulty="어려움">어려움</button>
+              </div>
+          </div>
+          
+          <div class="mb-8">
+              <h2 class="text-2xl mb-3 text-glow">무기 선택</h2>
+              <div id="weapon-selection" class="flex justify-center gap-4">
+                  <button class="button-retro selection-button" data-weapon="machine-gun">기관총</button>
+                  <button class="button-retro selection-button" data-weapon="missile">유도 미사일</button>
+                  <button class="button-retro selection-button" data-weapon="bomb">폭탄 발사기</button>
+              </div>
+          </div>
+
+          <button id="start-button" class="button-retro" disabled>게임 시작</button>
       </div>
 
       <div id="pause-screen" class="overlay hidden">
           <h2 class="text-6xl font-bold mb-4 text-glow">일시정지</h2>
-          <p class="text-xl">Esc 키를 눌러 계속하세요</p>
+          <p class="text-xl">Esc 또는 버튼을 눌러 계속하세요</p>
       </div>
 
       <div id="levelup-screen" class="overlay hidden">
@@ -121,7 +156,7 @@
           <h2 class="text-6xl font-bold mb-4 text-glow">게임 오버</h2>
           <p id="gameover-time" class="text-3xl mb-2">생존 시간: 00:00</p>
           <p id="gameover-highscore" class="text-xl mb-8">최고 기록: 00:00</p>
-          <button id="restart-button" class="button-retro">다시 시작</button>
+          <button id="restart-button" class="button-retro">새로 시작</button>
       </div>
     </div>
   </main>
@@ -137,7 +172,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const gameOverScreen = document.getElementById('gameover-screen');
     const startButton = document.getElementById('start-button');
     const restartButton = document.getElementById('restart-button');
+    const pauseButton = document.getElementById('pause-button');
     const levelUpOptionsContainer = document.getElementById('levelup-options');
+    const difficultySelection = document.getElementById('difficulty-selection');
+    const weaponSelection = document.getElementById('weapon-selection');
 
     // UI Elements
     const levelUI = document.getElementById('level-ui');
@@ -152,15 +190,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const CANVAS_WIDTH = 800;
     const CANVAS_HEIGHT = 600;
     const PLAYER_SIZE = 20;
-    const INITIAL_HP = 100;
 
+    // --- Game Configs ---
+    const DIFFICULTY_SETTINGS = {
+        '쉬움': { hp: 120, enemyHpMult: 0.7, enemySpeedMult: 0.8, spawnRateMult: 1.2 },
+        '보통': { hp: 100, enemyHpMult: 1.0, enemySpeedMult: 1.0, spawnRateMult: 1.0 },
+        '어려움': { hp: 80, enemyHpMult: 1.5, enemySpeedMult: 1.2, spawnRateMult: 0.8 },
+    };
+    const WEAPON_SETTINGS = {
+        'machine-gun': { fireRate: 400, damage: 10, projectileType: 'bullet' },
+        'missile': { fireRate: 1000, damage: 35, projectileType: 'missile' },
+        'bomb': { fireRate: 800, damage: 25, projectileType: 'bomb' },
+    };
+   
     // --- Audio ---
     let audioContext;
     try {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) {
-        console.error("Web Audio API is not supported in this browser");
-    }
+    } catch (e) { console.error("Web Audio API is not supported in this browser"); }
 
     function playSound(type, frequency, duration, volume = 0.3) {
         if (!audioContext) return;
@@ -168,37 +215,38 @@ document.addEventListener('DOMContentLoaded', () => {
         const gainNode = audioContext.createGain();
         oscillator.connect(gainNode);
         gainNode.connect(audioContext.destination);
-
         oscillator.type = type;
         oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
         gainNode.gain.setValueAtTime(volume, audioContext.currentTime);
         gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + duration);
-        
         oscillator.start(audioContext.currentTime);
         oscillator.stop(audioContext.currentTime + duration);
     }
-
     const sounds = {
         hit: () => playSound('square', 150, 0.1, 0.2),
         shoot: () => playSound('triangle', 440, 0.05, 0.1),
-        xp: () => playSound('sine', 600, 0.1),
+        xp: () => playSound('sine', 600, 0.1, 0.2),
         levelUp: () => playSound('sine', 880, 0.4),
         heal: () => playSound('sine', 700, 0.3),
         dash: () => playSound('sine', 300, 0.2, 0.4),
-        explosion: () => playSound('sine', 50, 0.3, 0.5)
+        explosion: () => playSound('sine', 50, 0.3, 0.5),
+        nuke: () => playSound('sine', 100, 1.0, 0.8)
     };
     
     // --- Game State ---
     let gameState = 'start';
     let isPaused = false;
-    let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, explosions, orbitalShields;
+    let selectedDifficulty, selectedWeapon;
+    let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, nukes, explosions, orbitalShields;
     let timer, gameTime, lastTime, animationFrameId;
+    let lastSpawnTime, spawnInterval;
+    let bossSpawned;
     let mousePos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
     let highScore = Number(localStorage.getItem('neonSurvivorHighScore') || 0);
 
     // --- Upgrades ---
     const UPGRADES = [
-        { id: 'firerate', title: "기관총", description: "공격 속도 20% 증가", apply: p => p.fireRate *= 0.8 },
+        { id: 'firerate', title: "연사력 강화", description: "공격 속도 20% 증가", apply: p => p.fireRate *= 0.8 },
         { id: 'damage', title: "강화 탄환", description: "공격력 25% 증가", apply: p => p.projectileDamage *= 1.25 },
         { id: 'multishot', title: "멀티샷", description: "발사체 수 +1", apply: p => p.projectiles++ },
         { id: 'hp', title: "나노 수리봇", description: "최대 체력 20 증가 및 모두 회복", apply: p => { p.maxHp += 20; p.hp = p.maxHp; } },
@@ -209,13 +257,16 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
     let availableUpgrades = [...UPGRADES];
     
-    function createInitialPlayer() {
+    function createInitialPlayer(difficulty, weapon) {
+        const difficultySettings = DIFFICULTY_SETTINGS[difficulty];
+        const weaponSettings = WEAPON_SETTINGS[weapon];
         return {
             x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2,
-            hp: INITIAL_HP, maxHp: INITIAL_HP,
+            hp: difficultySettings.hp, maxHp: difficultySettings.hp,
             xp: 0, level: 1, xpToNextLevel: 10,
-            fireRate: 500, projectiles: 1, projectileDamage: 10,
-            lastShotTime: 0, speed: 3, pickupRadius: 75,
+            weaponType: weapon,
+            fireRate: weaponSettings.fireRate, projectiles: 1, projectileDamage: weaponSettings.damage, projectileType: weaponSettings.projectileType,
+            lastShotTime: 0, speed: 3, pickupRadius: 100,
             dashCooldown: 2000, lastDashTime: 0, isDashing: false, dashDuration: 150, dashSpeed: 10,
             shields: 0, explosiveProjectiles: false,
         };
@@ -227,15 +278,47 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     }
 
+    function togglePause() {
+        if (gameState !== 'playing') return;
+        isPaused = !isPaused;
+        pauseScreen.classList.toggle('hidden', !isPaused);
+        if (!isPaused) { // Unpausing
+            lastTime = performance.now(); // Reset lastTime to avoid a large deltaTime jump
+            requestAnimationFrame(gameLoop);
+        }
+    }
+
     function init() {
         highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
+        
+        difficultySelection.addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                selectedDifficulty = e.target.dataset.difficulty;
+                [...difficultySelection.children].forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+                checkSelections();
+            }
+        });
+        weaponSelection.addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                selectedWeapon = e.target.dataset.weapon;
+                [...weaponSelection.children].forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+                checkSelections();
+            }
+        });
+
         startButton.onclick = startGame;
-        restartButton.onclick = startGame;
+        restartButton.onclick = () => {
+            gameOverScreen.classList.add('hidden');
+            pauseButton.classList.add('hidden');
+            startScreen.classList.remove('hidden');
+        };
+        pauseButton.onclick = togglePause;
 
         window.addEventListener('keydown', e => {
-            if (e.key === "Escape" && gameState === 'playing') {
-                isPaused = !isPaused;
-                pauseScreen.classList.toggle('hidden', !isPaused);
+            if (e.key === "Escape") {
+                togglePause();
             }
             if (e.code === 'Space' && gameState === 'playing' && !isPaused) {
                 const now = performance.now();
@@ -253,19 +336,27 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function checkSelections() {
+        startButton.disabled = !(selectedDifficulty && selectedWeapon);
+    }
+
     function startGame() {
-        player = createInitialPlayer();
+        player = createInitialPlayer(selectedDifficulty, selectedWeapon);
         enemies = [];
         projectiles = [];
         enemyProjectiles = [];
         xpGems = [];
         healthPacks = [];
+        nukes = [];
         explosions = [];
         orbitalShields = [];
         availableUpgrades = [...UPGRADES];
 
         timer = 0;
         gameTime = 0;
+        lastSpawnTime = 0;
+        spawnInterval = 4000 * DIFFICULTY_SETTINGS[selectedDifficulty].spawnRateMult;
+        bossSpawned = false;
         lastTime = performance.now();
         gameState = 'playing';
         isPaused = false;
@@ -274,6 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gameOverScreen.classList.add('hidden');
         levelUpScreen.classList.add('hidden');
         pauseScreen.classList.add('hidden');
+        pauseButton.classList.remove('hidden');
         
         updateUI();
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -297,10 +389,8 @@ document.addEventListener('DOMContentLoaded', () => {
         player.x = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_WIDTH - PLAYER_SIZE / 2, player.x));
         player.y = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_HEIGHT - PLAYER_SIZE / 2, player.y));
         
-        // Spawning
-        spawnEnemies();
-
         // Updates
+        updateEnemySpawning(gameTime);
         updateEnemies(deltaTime);
         updateProjectiles(deltaTime);
         updateXPGems();
@@ -330,62 +420,60 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.shadowBlur = 10;
 
-        // Draw Health Packs
         healthPacks.forEach(pack => {
-            ctx.font = `20px sans-serif`;
-            ctx.fillStyle = '#FF4444'; ctx.shadowColor = '#FF4444';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('+', pack.x, pack.y);
+            ctx.font = `20px sans-serif`; ctx.fillStyle = '#FF4444'; ctx.shadowColor = '#FF4444';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', pack.x, pack.y);
+        });
+        nukes.forEach(nuke => {
+            ctx.font = `20px sans-serif`; ctx.fillStyle = '#FFFF00'; ctx.shadowColor = '#FFFF00';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('N', nuke.x, nuke.y);
         });
 
-        // Draw XP Gems
         xpGems.forEach(gem => {
             ctx.beginPath(); ctx.arc(gem.x, gem.y, 5, 0, Math.PI * 2);
-            ctx.fillStyle = '#39FF14'; ctx.shadowColor = '#39FF14';
-            ctx.fill();
+            ctx.fillStyle = '#39FF14'; ctx.shadowColor = '#39FF14'; ctx.fill();
         });
 
-        // Draw Player
         ctx.fillStyle = player.isDashing ? '#FFFFFF' : '#00FFFF';
         ctx.shadowColor = player.isDashing ? '#FFFFFF' : '#00FFFF';
         ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
 
-        // Draw Orbital Shields
         orbitalShields.forEach(s => {
             ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
-            ctx.fillStyle = s.color; ctx.shadowColor = s.color;
-            ctx.fill();
+            ctx.fillStyle = s.color; ctx.shadowColor = s.color; ctx.fill();
         });
 
-        // Draw Enemies
         enemies.forEach(e => {
             ctx.fillStyle = e.color; ctx.shadowColor = e.color;
             ctx.fillRect(e.x - e.size / 2, e.y - e.size / 2, e.size, e.size);
         });
 
-        // Draw Projectiles
         projectiles.forEach(p => {
-            ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.beginPath();
+            if (p.type === 'bomb') {
+                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            } else {
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            }
             ctx.fillStyle = '#FFFFFF'; ctx.shadowColor = '#FFFFFF';
             ctx.fill();
         });
         enemyProjectiles.forEach(p => {
             ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-            ctx.fillStyle = p.color; ctx.shadowColor = p.color;
-            ctx.fill();
+            ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.fill();
         });
 
-        // Draw Explosions
         explosions.forEach(exp => {
             ctx.beginPath(); ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(255, 255, 0, ${exp.alpha})`;
             ctx.fill();
         });
-
         ctx.shadowBlur = 0;
     }
     
     function gameLoop(timestamp) {
+        if (isPaused) return;
+
         const deltaTime = timestamp - lastTime;
         lastTime = timestamp;
 
@@ -405,31 +493,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Entity Update & Spawning ---
 
-    function spawnEnemies() {
-        const spawnRate = 1 - (gameTime / 1000) * 0.01;
-        if (Math.random() > Math.max(0.1, spawnRate)) return;
+    function updateEnemySpawning(now) {
+        if (now - lastSpawnTime > spawnInterval) {
+            lastSpawnTime = now;
+            spawnInterval = Math.max(500, spawnInterval * 0.98); // Gradually decrease spawn interval
+            
+            const spawnCount = 1 + Math.floor(timer / 15);
+            for (let i = 0; i < spawnCount; i++) {
+                spawnEnemy();
+            }
+        }
+        if (!bossSpawned && timer >= 120) {
+            spawnEnemy('boss');
+            bossSpawned = true;
+        }
+    }
 
+    function spawnEnemy(type) {
+        const diffSettings = DIFFICULTY_SETTINGS[selectedDifficulty];
+        
         const side = Math.floor(Math.random() * 4);
         let x, y;
         if (side === 0) { x = -20; y = Math.random() * CANVAS_HEIGHT; }
         else if (side === 1) { x = CANVAS_WIDTH + 20; y = Math.random() * CANVAS_HEIGHT; }
         else if (side === 2) { x = Math.random() * CANVAS_WIDTH; y = -20; }
         else { x = Math.random() * CANVAS_WIDTH; y = CANVAS_HEIGHT + 20; }
+        
+        if (!type) {
+            const roll = Math.random();
+            if (roll < 0.65) type = 'grunt';
+            else if (roll < 0.9) type = 'shooter';
+            else type = 'tank';
+        }
 
-        const typeChance = Math.random();
         let enemy;
-        if (timer > 120 && !enemies.some(e => e.isBoss)) {
-            // Spawn Boss
-            enemy = { id: Date.now(), x, y, size: 80, speed: 0.8, hp: 5000, maxHp: 5000, color: '#FF0000', type: 'boss', isBoss: true, lastAttack: 0, attackCooldown: 2000 };
-        } else if (typeChance < 0.2 && timer > 30) {
-            // Shooter
-            enemy = { id: Date.now(), x, y, size: 25, speed: 1, hp: 30, color: '#FFFF00', type: 'shooter', lastAttack: 0, attackCooldown: 3000 };
-        } else if (typeChance < 0.5 && timer > 60) {
-            // Tank
-            enemy = { id: Date.now(), x, y, size: 30, speed: 0.8, hp: 100, color: '#FF00FF', type: 'tank' };
-        } else {
-            // Grunt
-            enemy = { id: Date.now(), x, y, size: 20, speed: 1.5, hp: 20, color: '#FF5733', type: 'grunt' };
+        const enemyStrength = 1 + timer / 60; // Enemies get stronger over time
+        const hpMultiplier = diffSettings.enemyHpMult * enemyStrength;
+        const speedMultiplier = diffSettings.enemySpeedMult;
+        
+        switch (type) {
+            case 'boss':
+                enemy = { id: Date.now(), x, y, size: 80, speed: 0.8 * speedMultiplier, hp: 5000 * hpMultiplier, maxHp: 5000 * hpMultiplier, color: '#FF0000', type: 'boss', isBoss: true, lastAttack: 0, attackCooldown: 2000 };
+                break;
+            case 'shooter':
+                enemy = { id: Date.now(), x, y, size: 25, speed: 1 * speedMultiplier, hp: 30 * hpMultiplier, color: '#FFFF00', type: 'shooter', lastAttack: 0, attackCooldown: 3000 };
+                break;
+            case 'tank':
+                enemy = { id: Date.now(), x, y, size: 30, speed: 0.8 * speedMultiplier, hp: 100 * hpMultiplier, color: '#FF00FF', type: 'tank' };
+                break;
+            default: // grunt
+                enemy = { id: Date.now(), x, y, size: 20, speed: 1.5 * speedMultiplier, hp: 20 * hpMultiplier, color: '#FF5733', type: 'grunt' };
         }
         enemies.push(enemy);
     }
@@ -440,16 +553,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const dy = player.y - e.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             
-            if (e.type === 'shooter') {
-                if (dist > 250) { // Move towards player if far
-                    e.x += (dx / dist) * e.speed;
-                    e.y += (dy / dist) * e.speed;
+            if (e.type === 'shooter' || e.type === 'boss') {
+                if (dist > 250) { 
+                    e.x += (dx / dist) * e.speed; 
+                    e.y += (dy / dist) * e.speed; 
                 }
-                // Attack
                 const now = performance.now();
                 if (now - e.lastAttack > e.attackCooldown) {
                     e.lastAttack = now;
-                    enemyProjectiles.push({ x: e.x, y: e.y, dx: (dx/dist)*3, dy: (dy/dist)*3, size: 8, color: '#FFFF00' });
+                    enemyProjectiles.push({ x: e.x, y: e.y, dx: (dx/dist)*3, dy: (dy/dist)*3, size: e.isBoss ? 12 : 8, color: '#FFFF00', damage: e.isBoss ? 25 : 15 });
                 }
             } else {
                 e.x += (dx / dist) * e.speed;
@@ -479,106 +591,119 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dirX = dx / dist; const dirY = dy / dist;
                     const rotatedDirX = dirX * Math.cos(angleOffset) - dirY * Math.sin(angleOffset);
                     const rotatedDirY = dirX * Math.sin(angleOffset) + dirY * Math.cos(angleOffset);
-                    projectiles.push({ x: player.x, y: player.y, dx: rotatedDirX * 7, dy: rotatedDirY * 7 });
+                    
+                    let proj = { x: player.x, y: player.y, dx: rotatedDirX * 7, dy: rotatedDirY * 7, type: player.projectileType };
+                    if (proj.type === 'missile') { proj.target = nearestEnemy; proj.speed = 6; }
+                    if (proj.type === 'bomb') { proj.gravity = 0.05; proj.fuse = 1500; }
+                    projectiles.push(proj);
                 }
             }
         }
-        projectiles.forEach(p => { p.x += p.dx; p.y += p.dy; });
-        projectiles = projectiles.filter(p => p.x > 0 && p.x < CANVAS_WIDTH && p.y > 0 && p.y < CANVAS_HEIGHT);
 
-        // Enemy projectiles
+        projectiles.forEach((p, index) => {
+            if (p.type === 'missile' && p.target && p.target.hp > 0) {
+                const dx = p.target.x - p.x; const dy = p.target.y - p.y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                p.dx = (dx / dist) * p.speed; p.dy = (dy / dist) * p.speed;
+            } else if (p.type === 'bomb') {
+                p.dy += p.gravity;
+                p.fuse -= deltaTime;
+                if (p.fuse <= 0) {
+                    explosions.push({ x: p.x, y: p.y, radius: 80, duration: 200, alpha: 1, damage: player.projectileDamage });
+                    sounds.explosion();
+                    projectiles.splice(index, 1);
+                }
+            }
+            p.x += p.dx; p.y += p.dy;
+        });
+        projectiles = projectiles.filter(p => p.x > -10 && p.x < CANVAS_WIDTH + 10 && p.y > -10 && p.y < CANVAS_HEIGHT + 10);
+
         enemyProjectiles.forEach(p => { p.x += p.dx; p.y += p.dy; });
         enemyProjectiles = enemyProjectiles.filter(p => p.x > 0 && p.x < CANVAS_WIDTH && p.y > 0 && p.y < CANVAS_HEIGHT);
     }
-
+    
     function updateXPGems() {
         xpGems.forEach(gem => {
             const dx = player.x - gem.x;
             const dy = player.y - gem.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             if (dist < player.pickupRadius) {
-                gem.x += (dx/dist) * 4;
-                gem.y += (dy/dist) * 4;
+                const magnetSpeed = 4;
+                gem.x += (dx / dist) * magnetSpeed;
+                gem.y += (dy / dist) * magnetSpeed;
             }
         });
     }
 
     function updateExplosions(deltaTime) {
-        explosions.forEach(exp => {
-            exp.duration -= deltaTime;
-            exp.alpha = exp.duration / 200;
+        explosions.forEach((exp, index) => {
+            exp.alpha -= deltaTime / exp.duration;
+            if (exp.alpha <= 0) {
+                explosions.splice(index, 1);
+            }
         });
-        explosions = explosions.filter(exp => exp.duration > 0);
     }
-
+    
     function updateOrbitalShields(deltaTime) {
-        if(player.shields > orbitalShields.length) {
-            orbitalShields.push({ angle: 0, radius: 50, size: 10, damage: 15, color: '#00FFFF', lastHitTime: 0 });
-        }
-        orbitalShields.forEach((shield, i) => {
-            shield.angle += 0.05;
-            const baseAngle = (2 * Math.PI / orbitalShields.length) * i;
-            shield.x = player.x + Math.cos(shield.angle + baseAngle) * shield.radius;
-            shield.y = player.y + Math.sin(shield.angle + baseAngle) * shield.radius;
+        orbitalShields.forEach((shield, index) => {
+            shield.angle += shield.speed * (deltaTime / 1000);
+            shield.x = player.x + Math.cos(shield.angle) * shield.radius;
+            shield.y = player.y + Math.sin(shield.angle) * shield.radius;
         });
     }
 
     // --- Collision Detection ---
     function handleCollisions() {
-        // Projectiles vs Enemies
         projectiles = projectiles.filter(p => {
             for (const e of enemies) {
                 if (Math.sqrt((p.x - e.x)**2 + (p.y - e.y)**2) < e.size / 2 + 5) {
                     sounds.hit();
                     e.hp -= player.projectileDamage;
-                    if (player.explosiveProjectiles) {
-                        explosions.push({ x: p.x, y: p.y, radius: 50, duration: 200, alpha: 1, damage: player.projectileDamage / 2 });
+                    if (player.explosiveProjectiles || p.type === 'bomb') {
+                        let radius = p.type === 'bomb' ? 80 : 50;
+                        let damage = p.type === 'bomb' ? player.projectileDamage : player.projectileDamage / 2;
+                        explosions.push({ x: p.x, y: p.y, radius, duration: 200, alpha: 1, damage });
                         sounds.explosion();
                     }
-                    return false; // remove projectile
+                    return false;
                 }
             }
             return true;
         });
 
-        // Explosions vs Enemies
         explosions.forEach(exp => {
             enemies.forEach(e => {
                 if (Math.sqrt((exp.x - e.x)**2 + (exp.y - e.y)**2) < e.size / 2 + exp.radius) {
-                    e.hp -= exp.damage * (exp.alpha); // damage based on alpha
+                    e.hp -= exp.damage * (exp.alpha);
                 }
             });
         });
-
-        // Orbital Shields vs Enemies
+        
         const now = performance.now();
         orbitalShields.forEach(s => {
-            if (now - s.lastHitTime < 500) return; // Cooldown per shield
+            if (now - s.lastHitTime < 500) return;
             for (const e of enemies) {
                  if (Math.sqrt((s.x - e.x)**2 + (s.y - e.y)**2) < e.size / 2 + s.size / 2) {
-                    sounds.hit();
-                    e.hp -= s.damage;
-                    s.lastHitTime = now;
-                    break; // shield hits one enemy at a time
+                    sounds.hit(); e.hp -= s.damage; s.lastHitTime = now; break;
                  }
             }
         });
 
-        // Dead enemies
-        let newXpGems = [], newHealthPacks = [];
+        let newXpGems = [], newHealthPacks = [], newNukes = [];
         enemies = enemies.filter(e => {
             if (e.hp <= 0) {
                 const value = e.isBoss ? 100 : (e.type === 'tank' ? 10 : (e.type === 'shooter' ? 5 : 2));
                 newXpGems.push({ x: e.x, y: e.y, value });
-                if (Math.random() < 0.05) newHealthPacks.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.08) newHealthPacks.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.02) newNukes.push({ x: e.x, y: e.y });
                 return false;
             }
             return true;
         });
         xpGems.push(...newXpGems);
         healthPacks.push(...newHealthPacks);
+        nukes.push(...newNukes);
 
-        // Player vs Enemies & Enemy Projectiles
         if (!player.isDashing) {
             enemies.forEach(e => {
                 if (Math.sqrt((player.x - e.x)**2 + (player.y - e.y)**2) < PLAYER_SIZE / 2 + e.size / 2) {
@@ -587,39 +712,54 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             enemyProjectiles = enemyProjectiles.filter(p => {
                 if (Math.sqrt((player.x - p.x)**2 + (player.y - p.y)**2) < PLAYER_SIZE / 2 + p.size / 2) {
-                    player.hp -= 15; return false;
+                    player.hp -= p.damage; return false;
                 }
                 return true;
             });
         }
         
-        // Player vs Items
         xpGems = xpGems.filter(gem => {
-            if (Math.sqrt((player.x - gem.x)**2 + (player.y - gem.y)**2) < PLAYER_SIZE / 2) {
+            if (Math.sqrt((player.x - gem.x)**2 + (player.y - gem.y)**2) < PLAYER_SIZE / 2 + 5) {
                 sounds.xp(); player.xp += gem.value; return false;
             }
             return true;
         });
         healthPacks = healthPacks.filter(pack => {
-            if (Math.sqrt((player.x - pack.x)**2 + (player.y - pack.y)**2) < PLAYER_SIZE / 2) {
+            if (Math.sqrt((player.x - pack.x)**2 + (player.y - pack.y)**2) < PLAYER_SIZE / 2 + 10) {
                 sounds.heal(); player.hp = Math.min(player.maxHp, player.hp + 20); return false;
+            }
+            return true;
+        });
+        nukes = nukes.filter(nuke => {
+            if (Math.sqrt((player.x - nuke.x)**2 + (player.y - nuke.y)**2) < PLAYER_SIZE / 2 + 10) {
+                sounds.nuke();
+                enemies.forEach(e => {
+                    e.hp -= 200; // Nuke damage
+                    explosions.push({ x: e.x, y: e.y, radius: e.size * 1.5, duration: 500, alpha: 1, damage: 0 });
+                });
+                return false;
             }
             return true;
         });
     }
 
     // --- Game Flow ---
-
     function handleLevelUp() {
         sounds.levelUp();
-        gameState = 'levelUp';
+        isPaused = true;
         player.xp -= player.xpToNextLevel;
         player.level++;
         player.xpToNextLevel = Math.floor(player.xpToNextLevel * 1.5);
         
         levelUpOptionsContainer.innerHTML = '';
         const shuffled = availableUpgrades.sort(() => 0.5 - Math.random());
-        const options = shuffled.slice(0, 3);
+        let options = shuffled.slice(0, 3);
+        if (player.weaponType !== 'machine-gun' && !player.explosiveProjectiles) {
+            const explosiveUpgrade = UPGRADES.find(u => u.id === 'explosive');
+            if(explosiveUpgrade && !options.includes(explosiveUpgrade)) {
+                options[0] = explosiveUpgrade;
+            }
+        }
         
         options.forEach(opt => {
             const card = document.createElement('div');
@@ -633,17 +773,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function selectUpgrade(upgrade) {
         upgrade.apply(player);
-        if(upgrade.id === 'shield' || upgrade.id === 'explosive') {
+        if(upgrade.id === 'shield') {
+             const newShield = {
+                angle: (orbitalShields.length * Math.PI) / (player.shields / 2),
+                radius: 50,
+                speed: 3,
+                size: 15,
+                color: '#00FFFF',
+                damage: 25,
+                lastHitTime: 0
+            };
+            orbitalShields.push(newShield);
+        }
+        if(upgrade.id === 'explosive') {
             availableUpgrades = availableUpgrades.filter(u => u.id !== upgrade.id); // Remove non-stackable
         }
-        gameState = 'playing';
+        isPaused = false;
         levelUpScreen.classList.add('hidden');
+        lastTime = performance.now(); // Reset lastTime to avoid a large deltaTime jump
+        requestAnimationFrame(gameLoop);
     }
     
     function showGameOverScreen() {
+        if(animationFrameId) cancelAnimationFrame(animationFrameId);
         gameOverTimeUI.textContent = `생존 시간: ${formatTime(timer)}`;
         gameOverHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
         gameOverScreen.classList.remove('hidden');
+        pauseButton.classList.add('hidden');
     }
 
     // --- Initialize ---
