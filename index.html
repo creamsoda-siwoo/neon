@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>네온 서바이버 (Neon Survivor)</title>
+  <title>네온 서바이버</title>
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
@@ -58,6 +58,8 @@
         border-width: 2px;
         border-color: #fff;
         background-color: transparent;
+        padding: 0.5rem 1rem;
+        height: 100%;
     }
     .selection-button.selected {
         background-color: #00ffff;
@@ -85,7 +87,7 @@
         justify-content: center;
         text-align: center;
         z-index: 10;
-        padding: 2rem;
+        padding: 1rem;
     }
     .hidden {
         display: none;
@@ -117,10 +119,24 @@
       <button id="pause-button" class="absolute top-2 right-2 text-2xl w-12 h-12 button-retro hidden items-center justify-center" style="padding: 0;">||</button>
       
       <div id="start-screen" class="overlay">
-          <h1 class="text-6xl font-bold mb-8 text-glow">네온 서바이버</h1>
+          <h1 class="text-5xl md:text-6xl font-bold mb-4 text-glow">네온 서바이버</h1>
           
-          <div class="mb-6">
-              <h2 class="text-2xl mb-3 text-glow">난이도 선택</h2>
+          <div class="mb-4">
+              <h2 class="text-xl mb-2 text-glow">직업 선택</h2>
+              <div id="job-selection" class="grid grid-cols-3 md:grid-cols-5 gap-2 mb-2">
+                   <button class="button-retro selection-button" data-job="engineer">엔지니어</button>
+                   <button class="button-retro selection-button" data-job="assassin">어쌔신</button>
+                   <button class="button-retro selection-button" data-job="berserker">광전사</button>
+                   <button class="button-retro selection-button" data-job="medic">힐러</button>
+                   <button class="button-retro selection-button" data-job="summoner">소환사</button>
+              </div>
+              <div id="job-stats" class="text-sm h-12 p-2 border-2 border-cyan-400 rounded-lg text-left bg-black bg-opacity-25">
+                  <p>직업 위로 마우스를 올려 능력을 확인하세요.</p>
+              </div>
+          </div>
+
+          <div class="mb-4">
+              <h2 class="text-xl mb-2 text-glow">난이도 선택</h2>
               <div id="difficulty-selection" class="flex justify-center gap-4">
                   <button class="button-retro selection-button" data-difficulty="쉬움">쉬움</button>
                   <button class="button-retro selection-button" data-difficulty="보통">보통</button>
@@ -128,21 +144,31 @@
               </div>
           </div>
           
-          <div class="mb-8">
-              <h2 class="text-2xl mb-3 text-glow">무기 선택</h2>
-              <div id="weapon-selection" class="flex justify-center gap-4">
+          <div class="w-full max-w-2xl">
+              <h2 class="text-xl mb-2 text-glow">무기 선택</h2>
+              <div id="weapon-selection" class="grid grid-cols-3 md:grid-cols-6 gap-2 mb-2">
                   <button class="button-retro selection-button" data-weapon="machine-gun">기관총</button>
                   <button class="button-retro selection-button" data-weapon="missile">유도 미사일</button>
-                  <button class="button-retro selection-button" data-weapon="bomb">폭탄 발사기</button>
+                  <button class="button-retro selection-button" data-weapon="bomb">폭탄</button>
+                  <button class="button-retro selection-button" data-weapon="shotgun">샷건</button>
+                  <button class="button-retro selection-button" data-weapon="laser">레이저</button>
+                  <button class="button-retro selection-button" data-weapon="bow">활</button>
+              </div>
+              <div id="weapon-stats" class="text-sm h-20 p-2 border-2 border-cyan-400 rounded-lg text-left bg-black bg-opacity-25">
+                  <p>무기 위로 마우스를 올려 능력치를 확인하세요.</p>
               </div>
           </div>
 
-          <button id="start-button" class="button-retro" disabled>게임 시작</button>
+          <button id="start-button" class="button-retro mt-4" disabled>게임 시작</button>
       </div>
 
       <div id="pause-screen" class="overlay hidden">
-          <h2 class="text-6xl font-bold mb-4 text-glow">일시정지</h2>
-          <p class="text-xl">Esc 또는 버튼을 눌러 계속하세요</p>
+          <h2 class="text-6xl font-bold mb-8 text-glow">일시정지</h2>
+          <div class="flex flex-col gap-4 w-64">
+              <button id="resume-button" class="button-retro">계속하기</button>
+              <button id="restart-pause-button" class="button-retro">다시 시작</button>
+              <button id="quit-button" class="button-retro">그만하기</button>
+          </div>
       </div>
 
       <div id="levelup-screen" class="overlay hidden">
@@ -174,8 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const restartButton = document.getElementById('restart-button');
     const pauseButton = document.getElementById('pause-button');
     const levelUpOptionsContainer = document.getElementById('levelup-options');
+    const jobSelection = document.getElementById('job-selection');
+    const jobStatsUI = document.getElementById('job-stats');
     const difficultySelection = document.getElementById('difficulty-selection');
     const weaponSelection = document.getElementById('weapon-selection');
+    const weaponStatsUI = document.getElementById('weapon-stats');
+    const resumeButton = document.getElementById('resume-button');
+    const restartPauseButton = document.getElementById('restart-pause-button');
+    const quitButton = document.getElementById('quit-button');
 
     // UI Elements
     const levelUI = document.getElementById('level-ui');
@@ -192,22 +224,31 @@ document.addEventListener('DOMContentLoaded', () => {
     const PLAYER_SIZE = 20;
 
     // --- Game Configs ---
+    const JOB_SETTINGS = {
+        'engineer': { description: '궤도 방패 1개를 가지고 시작합니다.' },
+        'assassin': { description: '이동 속도 +15%, 대시 쿨타임 -25%' },
+        'berserker': { description: '최대 체력 -20%, 공격력 +25%' },
+        'medic': { description: '회복 아이템 효율 +50%' },
+        'summoner': { description: '자동 공격 드론 1기와 함께 시작합니다.' },
+    };
     const DIFFICULTY_SETTINGS = {
         '쉬움': { hp: 120, enemyHpMult: 0.7, enemySpeedMult: 0.8, spawnRateMult: 1.2 },
         '보통': { hp: 100, enemyHpMult: 1.0, enemySpeedMult: 1.0, spawnRateMult: 1.0 },
         '어려움': { hp: 80, enemyHpMult: 1.5, enemySpeedMult: 1.2, spawnRateMult: 0.8 },
     };
     const WEAPON_SETTINGS = {
-        'machine-gun': { fireRate: 400, damage: 10, projectileType: 'bullet' },
-        'missile': { fireRate: 1000, damage: 35, projectileType: 'missile' },
-        'bomb': { fireRate: 800, damage: 25, projectileType: 'bomb' },
+        'machine-gun': { fireRate: 400, damage: 10, projectileType: 'bullet', name: '기관총', description: '가장 균형잡힌 기본 무기입니다.' },
+        'missile': { fireRate: 1000, damage: 35, projectileType: 'missile', name: '유도 미사일', description: '가장 가까운 적을 추적합니다.' },
+        'bomb': { fireRate: 800, damage: 25, projectileType: 'bomb', name: '폭탄', description: '포물선으로 날아가 폭발합니다.' },
+        'shotgun': { fireRate: 700, damage: 8, projectileType: 'pellet', name: '샷건', pellets: 5, spread: 0.5, description: '근거리의 적들에게 강력합니다.' },
+        'laser': { fireRate: 1200, damage: 50, projectileType: 'laser', name: '레이저', description: '모든 적을 관통합니다.' },
+        'bow': { fireRate: 600, damage: 20, projectileType: 'arrow', name: '활', description: '포물선을 그리며 날아가는 화살을 발사합니다.' },
     };
    
     // --- Audio ---
     let audioContext;
-    try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    } catch (e) { console.error("Web Audio API is not supported in this browser"); }
+    try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); }
+    catch (e) { console.error("Web Audio API is not supported in this browser"); }
 
     function playSound(type, frequency, duration, volume = 0.3) {
         if (!audioContext) return;
@@ -230,46 +271,71 @@ document.addEventListener('DOMContentLoaded', () => {
         heal: () => playSound('sine', 700, 0.3),
         dash: () => playSound('sine', 300, 0.2, 0.4),
         explosion: () => playSound('sine', 50, 0.3, 0.5),
-        nuke: () => playSound('sine', 100, 1.0, 0.8)
+        nuke: () => playSound('sine', 100, 1.0, 0.8),
+        powerup: () => playSound('sine', 900, 0.2),
+        freeze: () => playSound('sawtooth', 200, 0.5, 0.4),
+        shieldUp: () => playSound('sine', 1000, 0.2, 0.5),
+        shieldDown: () => playSound('square', 100, 0.2, 0.5),
     };
     
     // --- Game State ---
     let gameState = 'start';
     let isPaused = false;
-    let selectedDifficulty, selectedWeapon;
-    let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, nukes, explosions, orbitalShields;
+    let selectedJob, selectedDifficulty, selectedWeapon;
+    let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, nukes, explosions;
+    let orbitalShields, speedBoosts, fireRateBoosts, freezeBombs, invincibilityShields, drones;
     let timer, gameTime, lastTime, animationFrameId;
     let lastSpawnTime, spawnInterval;
-    let bossSpawned;
+    let bossSpawned, enemiesFrozen, enemiesFrozenTimer;
     let mousePos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+    let keysPressed = {};
+    let isTouching = false;
     let highScore = Number(localStorage.getItem('neonSurvivorHighScore') || 0);
 
     // --- Upgrades ---
     const UPGRADES = [
-        { id: 'firerate', title: "연사력 강화", description: "공격 속도 20% 증가", apply: p => p.fireRate *= 0.8 },
+        { id: 'firerate', title: "연사력 강화", description: "공격 속도 20% 증가", apply: p => { p.baseFireRate *= 0.8; p.fireRate = p.baseFireRate;} },
         { id: 'damage', title: "강화 탄환", description: "공격력 25% 증가", apply: p => p.projectileDamage *= 1.25 },
         { id: 'multishot', title: "멀티샷", description: "발사체 수 +1", apply: p => p.projectiles++ },
         { id: 'hp', title: "나노 수리봇", description: "최대 체력 20 증가 및 모두 회복", apply: p => { p.maxHp += 20; p.hp = p.maxHp; } },
-        { id: 'speed', title: "고속 추진기", description: "이동 속도 10% 증가", apply: p => p.speed *= 1.1 },
+        { id: 'speed', title: "고속 추진기", description: "이동 속도 10% 증가", apply: p => { p.baseSpeed *= 1.1; p.speed = p.baseSpeed; } },
         { id: 'shield', title: '궤도 방패', description: '주위를 도는 방패 추가', apply: p => p.shields++ },
         { id: 'explosive', title: '폭발탄', description: '탄환이 명중 시 폭발합니다', apply: p => p.explosiveProjectiles = true },
         { id: 'magnet', title: '경험치 자석', description: '경험치 획득 범위 50% 증가', apply: p => p.pickupRadius *= 1.5 },
     ];
     let availableUpgrades = [...UPGRADES];
     
-    function createInitialPlayer(difficulty, weapon) {
+    function createInitialPlayer(job, difficulty, weapon) {
         const difficultySettings = DIFFICULTY_SETTINGS[difficulty];
         const weaponSettings = WEAPON_SETTINGS[weapon];
-        return {
+        
+        let p = {
             x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2,
             hp: difficultySettings.hp, maxHp: difficultySettings.hp,
             xp: 0, level: 1, xpToNextLevel: 10,
-            weaponType: weapon,
-            fireRate: weaponSettings.fireRate, projectiles: 1, projectileDamage: weaponSettings.damage, projectileType: weaponSettings.projectileType,
-            lastShotTime: 0, speed: 3, pickupRadius: 100,
+            job: job, weaponType: weapon,
+            fireRate: weaponSettings.fireRate, baseFireRate: weaponSettings.fireRate,
+            projectiles: 1, projectileDamage: weaponSettings.damage, projectileType: weaponSettings.projectileType,
+            lastShotTime: 0, speed: 3, baseSpeed: 3, pickupRadius: 100,
             dashCooldown: 2000, lastDashTime: 0, isDashing: false, dashDuration: 150, dashSpeed: 10,
             shields: 0, explosiveProjectiles: false,
+            speedBoostTimer: 0, fireRateBoostTimer: 0, invincibilityTimer: 0,
+            healBonus: 1.0,
         };
+
+        // Apply job bonuses
+        if (job === 'engineer') p.shields = 1;
+        if (job === 'assassin') { p.baseSpeed *= 1.15; p.speed = p.baseSpeed; p.dashCooldown *= 0.75; }
+        if (job === 'berserker') { p.maxHp *= 0.8; p.hp = p.maxHp; p.projectileDamage *= 1.25; }
+        if (job === 'medic') p.healBonus = 1.5;
+        if (job === 'summoner') {
+            drones.push({
+                x: p.x, y: p.y - 30, size: 10, angle: Math.random() * Math.PI * 2,
+                radius: 40, speed: 2, lastShotTime: 0, fireRate: 1500, damage: 5
+            });
+        }
+        
+        return p;
     }
 
     function formatTime(seconds) {
@@ -279,11 +345,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function togglePause() {
-        if (gameState !== 'playing') return;
+        if (gameState !== 'playing' || levelUpScreen.classList.contains('hidden') === false) return;
         isPaused = !isPaused;
         pauseScreen.classList.toggle('hidden', !isPaused);
-        if (!isPaused) { // Unpausing
-            lastTime = performance.now(); // Reset lastTime to avoid a large deltaTime jump
+        if (!isPaused) {
+            lastTime = performance.now();
             requestAnimationFrame(gameLoop);
         }
     }
@@ -291,12 +357,39 @@ document.addEventListener('DOMContentLoaded', () => {
     function init() {
         highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
         
+        jobSelection.addEventListener('mouseover', e => {
+            if (e.target.tagName === 'BUTTON' && e.target.dataset.job) {
+                const jobId = e.target.dataset.job;
+                jobStatsUI.innerHTML = `<p>${JOB_SETTINGS[jobId].description}</p>`;
+            }
+        });
+        jobSelection.addEventListener('click', e => {
+            if (e.target.tagName === 'BUTTON') {
+                selectedJob = e.target.dataset.job;
+                [...jobSelection.children].forEach(btn => btn.classList.remove('selected'));
+                e.target.classList.add('selected');
+                checkSelections();
+            }
+        });
+
         difficultySelection.addEventListener('click', e => {
             if (e.target.tagName === 'BUTTON') {
                 selectedDifficulty = e.target.dataset.difficulty;
                 [...difficultySelection.children].forEach(btn => btn.classList.remove('selected'));
                 e.target.classList.add('selected');
                 checkSelections();
+            }
+        });
+        weaponSelection.addEventListener('mouseover', e => {
+            if (e.target.tagName === 'BUTTON' && e.target.dataset.weapon) {
+                const weaponId = e.target.dataset.weapon;
+                const stats = WEAPON_SETTINGS[weaponId];
+                const rpm = Math.round(60000 / stats.fireRate); 
+                weaponStatsUI.innerHTML = `
+                    <h3 class="text-lg text-cyan-300 font-bold">${stats.name}</h3>
+                    <p>데미지: ${stats.damage}${stats.pellets ? ' x ' + stats.pellets : ''} / 연사속도: ${rpm} RPM</p>
+                    <p>특징: ${stats.description}</p>
+                `;
             }
         });
         weaponSelection.addEventListener('click', e => {
@@ -315,11 +408,26 @@ document.addEventListener('DOMContentLoaded', () => {
             startScreen.classList.remove('hidden');
         };
         pauseButton.onclick = togglePause;
-
+        
+        resumeButton.onclick = togglePause;
+        restartPauseButton.onclick = () => {
+            pauseScreen.classList.add('hidden');
+            isPaused = false;
+            startGame();
+        };
+        quitButton.onclick = () => {
+            pauseScreen.classList.add('hidden');
+            isPaused = false;
+            gameState = 'start';
+            if(animationFrameId) cancelAnimationFrame(animationFrameId);
+            startScreen.classList.remove('hidden');
+            pauseButton.classList.add('hidden');
+        };
+        
+        // Input Listeners
         window.addEventListener('keydown', e => {
-            if (e.key === "Escape") {
-                togglePause();
-            }
+            keysPressed[e.code] = true;
+            if (e.key === "Escape") togglePause();
             if (e.code === 'Space' && gameState === 'playing' && !isPaused) {
                 const now = performance.now();
                 if (now - player.lastDashTime > player.dashCooldown) {
@@ -330,18 +438,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
-        window.addEventListener('mousemove', e => {
-            const rect = canvas.getBoundingClientRect();
-            mousePos = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        window.addEventListener('keyup', e => { keysPressed[e.code] = false; });
+        
+        const getMousePos = (e) => {
+             const rect = canvas.getBoundingClientRect();
+             return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+        canvas.addEventListener('mousemove', e => { if (!isTouching) mousePos = getMousePos(e); });
+        canvas.addEventListener('touchstart', e => { isTouching = true; mousePos = getMousePos(e.touches[0]); e.preventDefault(); }, { passive: false });
+        canvas.addEventListener('touchmove', e => { mousePos = getMousePos(e.touches[0]); e.preventDefault(); }, { passive: false });
+        canvas.addEventListener('touchend', () => { isTouching = false; });
+
+        // Auto-pause when tab is hidden
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && gameState === 'playing' && !isPaused) {
+                togglePause();
+            }
         });
     }
 
     function checkSelections() {
-        startButton.disabled = !(selectedDifficulty && selectedWeapon);
+        startButton.disabled = !(selectedJob && selectedDifficulty && selectedWeapon);
     }
 
     function startGame() {
-        player = createInitialPlayer(selectedDifficulty, selectedWeapon);
+        drones = [];
+        player = createInitialPlayer(selectedJob, selectedDifficulty, selectedWeapon);
+        
         enemies = [];
         projectiles = [];
         enemyProjectiles = [];
@@ -350,13 +473,26 @@ document.addEventListener('DOMContentLoaded', () => {
         nukes = [];
         explosions = [];
         orbitalShields = [];
+        speedBoosts = [];
+        fireRateBoosts = [];
+        freezeBombs = [];
+        invincibilityShields = [];
         availableUpgrades = [...UPGRADES];
 
+        if (player.job === 'engineer') {
+            orbitalShields.push({
+                angle: 0, radius: 50, speed: 3, size: 15,
+                color: '#FF00FF', damage: 25, lastHitTime: 0
+            });
+        }
+        
         timer = 0;
         gameTime = 0;
         lastSpawnTime = 0;
         spawnInterval = 4000 * DIFFICULTY_SETTINGS[selectedDifficulty].spawnRateMult;
         bossSpawned = false;
+        enemiesFrozen = false;
+        enemiesFrozenTimer = 0;
         lastTime = performance.now();
         gameState = 'playing';
         isPaused = false;
@@ -376,28 +512,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isPaused || gameState !== 'playing') return;
         gameTime += deltaTime;
         timer = Math.floor(gameTime / 1000);
-
+        
+        // Update Timers
+        if (player.speedBoostTimer > 0) { player.speedBoostTimer -= deltaTime; if (player.speedBoostTimer <= 0) player.speed = player.baseSpeed; }
+        if (player.fireRateBoostTimer > 0) { player.fireRateBoostTimer -= deltaTime; if (player.fireRateBoostTimer <= 0) player.fireRate = player.baseFireRate; }
+        if (player.invincibilityTimer > 0) { player.invincibilityTimer -= deltaTime; }
+        if (enemiesFrozenTimer > 0) { enemiesFrozenTimer -= deltaTime; if (enemiesFrozenTimer <= 0) enemiesFrozen = false; }
+        
         // Player Movement
-        const dx = mousePos.x - player.x;
-        const dy = mousePos.y - player.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        let moveX = 0, moveY = 0;
+        if (keysPressed['KeyW'] || keysPressed['ArrowUp']) moveY -= 1;
+        if (keysPressed['KeyS'] || keysPressed['ArrowDown']) moveY += 1;
+        if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) moveX -= 1;
+        if (keysPressed['KeyD'] || keysPressed['ArrowRight']) moveX += 1;
+        
         let currentSpeed = player.isDashing ? player.dashSpeed : player.speed;
-        if (dist > 1) {
-            player.x += (dx / dist) * currentSpeed;
-            player.y += (dy / dist) * currentSpeed;
+        
+        if (moveX !== 0 || moveY !== 0) {
+            const mag = Math.sqrt(moveX * moveX + moveY * moveY);
+            player.x += (moveX / mag) * currentSpeed;
+            player.y += (moveY / mag) * currentSpeed;
+        } else {
+            const dx = mousePos.x - player.x;
+            const dy = mousePos.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > 1) {
+                player.x += (dx / dist) * currentSpeed;
+                player.y += (dy / dist) * currentSpeed;
+            }
         }
+
         player.x = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_WIDTH - PLAYER_SIZE / 2, player.x));
         player.y = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_HEIGHT - PLAYER_SIZE / 2, player.y));
         
-        // Updates
         updateEnemySpawning(gameTime);
-        updateEnemies(deltaTime);
+        if (!enemiesFrozen) {
+            updateEnemies(deltaTime);
+        }
         updateProjectiles(deltaTime);
+        updateDrones(deltaTime);
         updateXPGems();
         updateExplosions(deltaTime);
         updateOrbitalShields(deltaTime);
 
-        // Collisions
         handleCollisions();
 
         if (player.hp <= 0) {
@@ -420,23 +577,41 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.shadowBlur = 10;
 
-        healthPacks.forEach(pack => {
-            ctx.font = `20px sans-serif`; ctx.fillStyle = '#FF4444'; ctx.shadowColor = '#FF4444';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('+', pack.x, pack.y);
-        });
-        nukes.forEach(nuke => {
-            ctx.font = `20px sans-serif`; ctx.fillStyle = '#FFFF00'; ctx.shadowColor = '#FFFF00';
-            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('N', nuke.x, nuke.y);
-        });
-
+        const itemFont = 'bold 20px sans-serif';
+        const drawItem = (item, text, color) => {
+            ctx.font = itemFont; ctx.fillStyle = color; ctx.shadowColor = color;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, item.x, item.y);
+        };
+        healthPacks.forEach(pack => drawItem(pack, '+', '#FF4444'));
+        nukes.forEach(nuke => drawItem(nuke, 'N', '#FFFF00'));
+        speedBoosts.forEach(item => drawItem(item, 'S', '#00FFFF'));
+        fireRateBoosts.forEach(item => drawItem(item, 'F', '#FFA500'));
+        freezeBombs.forEach(item => drawItem(item, '❄️', '#87CEEB'));
+        invincibilityShields.forEach(item => drawItem(item, '✨', '#F0E68C'));
+        
         xpGems.forEach(gem => {
             ctx.beginPath(); ctx.arc(gem.x, gem.y, 5, 0, Math.PI * 2);
             ctx.fillStyle = '#39FF14'; ctx.shadowColor = '#39FF14'; ctx.fill();
         });
 
+        // Player Invincibility Shield
+        if (player.invincibilityTimer > 0) {
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, PLAYER_SIZE, 0, Math.PI * 2);
+            ctx.strokeStyle = `rgba(255, 255, 0, ${0.5 + Math.sin(Date.now()/100)*0.2})`;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.lineWidth = 1;
+        }
+
         ctx.fillStyle = player.isDashing ? '#FFFFFF' : '#00FFFF';
         ctx.shadowColor = player.isDashing ? '#FFFFFF' : '#00FFFF';
         ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
+        
+        drones.forEach(d => {
+            ctx.beginPath(); ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+            ctx.fillStyle = '#9400D3'; ctx.shadowColor = '#9400D3'; ctx.fill();
+        });
 
         orbitalShields.forEach(s => {
             ctx.beginPath(); ctx.arc(s.x, s.y, s.size, 0, Math.PI * 2);
@@ -446,16 +621,39 @@ document.addEventListener('DOMContentLoaded', () => {
         enemies.forEach(e => {
             ctx.fillStyle = e.color; ctx.shadowColor = e.color;
             ctx.fillRect(e.x - e.size / 2, e.y - e.size / 2, e.size, e.size);
+            if (enemiesFrozen) {
+                ctx.fillStyle = 'rgba(173, 216, 230, 0.5)';
+                ctx.fillRect(e.x - e.size / 2, e.y - e.size / 2, e.size, e.size);
+            }
         });
 
         projectiles.forEach(p => {
-            ctx.beginPath();
-            if (p.type === 'bomb') {
-                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-            } else {
-                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.shadowColor = '#FFFFFF';
+            if (p.type === 'laser') {
+                ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.endX, p.endY);
+                ctx.strokeStyle = `rgba(255, 0, 255, ${p.lifespan / 100})`;
+                ctx.lineWidth = 5; ctx.shadowColor = '#FF00FF'; ctx.stroke();
+                ctx.lineWidth = 1;
+                return;
             }
-            ctx.fillStyle = '#FFFFFF'; ctx.shadowColor = '#FFFFFF';
+            if (p.type === 'arrow') {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(Math.atan2(p.dy, p.dx));
+                ctx.beginPath();
+                ctx.moveTo(8, 0); // Arrow head
+                ctx.lineTo(-8, -4);
+                ctx.lineTo(-8, 4);
+                ctx.closePath();
+                ctx.fillStyle = '#D2B48C';
+                ctx.shadowColor = '#D2B48C';
+                ctx.fill();
+                ctx.restore();
+                return;
+            }
+            ctx.beginPath(); ctx.fillStyle = p.color || '#FFFFFF';
+            if (p.type === 'bomb') ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+            else ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
             ctx.fill();
         });
         enemyProjectiles.forEach(p => {
@@ -465,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         explosions.forEach(exp => {
             ctx.beginPath(); ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 0, ${exp.alpha})`;
+            ctx.fillStyle = exp.color || `rgba(255, 255, 0, ${exp.alpha})`;
             ctx.fill();
         });
         ctx.shadowBlur = 0;
@@ -473,13 +671,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function gameLoop(timestamp) {
         if (isPaused) return;
-
         const deltaTime = timestamp - lastTime;
         lastTime = timestamp;
-
         update(deltaTime);
         draw();
-        
         animationFrameId = requestAnimationFrame(gameLoop);
     }
     
@@ -491,27 +686,20 @@ document.addEventListener('DOMContentLoaded', () => {
         xpBar.style.width = `${(player.xp / player.xpToNextLevel) * 100}%`;
     }
 
-    // --- Entity Update & Spawning ---
-
     function updateEnemySpawning(now) {
         if (now - lastSpawnTime > spawnInterval) {
             lastSpawnTime = now;
-            spawnInterval = Math.max(500, spawnInterval * 0.98); // Gradually decrease spawn interval
-            
+            spawnInterval = Math.max(500, spawnInterval * 0.98);
             const spawnCount = 1 + Math.floor(timer / 15);
-            for (let i = 0; i < spawnCount; i++) {
-                spawnEnemy();
-            }
+            for (let i = 0; i < spawnCount; i++) spawnEnemy();
         }
         if (!bossSpawned && timer >= 120) {
-            spawnEnemy('boss');
-            bossSpawned = true;
+            spawnEnemy('boss'); bossSpawned = true;
         }
     }
 
     function spawnEnemy(type) {
         const diffSettings = DIFFICULTY_SETTINGS[selectedDifficulty];
-        
         const side = Math.floor(Math.random() * 4);
         let x, y;
         if (side === 0) { x = -20; y = Math.random() * CANVAS_HEIGHT; }
@@ -521,97 +709,138 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!type) {
             const roll = Math.random();
-            if (roll < 0.65) type = 'grunt';
-            else if (roll < 0.9) type = 'shooter';
-            else type = 'tank';
+            if (roll < 0.5) type = 'grunt';
+            else if (roll < 0.7) type = 'shooter';
+            else if (roll < 0.85) type = 'tank';
+            else type = 'bomber';
         }
 
         let enemy;
-        const enemyStrength = 1 + timer / 60; // Enemies get stronger over time
+        const enemyStrength = 1 + timer / 60;
         const hpMultiplier = diffSettings.enemyHpMult * enemyStrength;
         const speedMultiplier = diffSettings.enemySpeedMult;
         
         switch (type) {
-            case 'boss':
-                enemy = { id: Date.now(), x, y, size: 80, speed: 0.8 * speedMultiplier, hp: 5000 * hpMultiplier, maxHp: 5000 * hpMultiplier, color: '#FF0000', type: 'boss', isBoss: true, lastAttack: 0, attackCooldown: 2000 };
-                break;
-            case 'shooter':
-                enemy = { id: Date.now(), x, y, size: 25, speed: 1 * speedMultiplier, hp: 30 * hpMultiplier, color: '#FFFF00', type: 'shooter', lastAttack: 0, attackCooldown: 3000 };
-                break;
-            case 'tank':
-                enemy = { id: Date.now(), x, y, size: 30, speed: 0.8 * speedMultiplier, hp: 100 * hpMultiplier, color: '#FF00FF', type: 'tank' };
-                break;
-            default: // grunt
-                enemy = { id: Date.now(), x, y, size: 20, speed: 1.5 * speedMultiplier, hp: 20 * hpMultiplier, color: '#FF5733', type: 'grunt' };
+            case 'boss': enemy = { id: performance.now(), x, y, size: 80, speed: 0.8 * speedMultiplier, hp: 5000 * hpMultiplier, maxHp: 5000 * hpMultiplier, color: '#FF0000', type: 'boss', isBoss: true, lastAttack: 0, attackCooldown: 2000 }; break;
+            case 'shooter': enemy = { id: performance.now(), x, y, size: 25, speed: 1 * speedMultiplier, hp: 30 * hpMultiplier, color: '#FFFF00', type: 'shooter', lastAttack: 0, attackCooldown: 3000 }; break;
+            case 'tank': enemy = { id: performance.now(), x, y, size: 40, speed: 0.6 * speedMultiplier, hp: 150 * hpMultiplier, color: '#FF00FF', type: 'tank' }; break;
+            case 'bomber': enemy = { id: performance.now(), x, y, size: 22, speed: 1.8 * speedMultiplier, hp: 15 * hpMultiplier, color: '#FFA500', type: 'bomber' }; break;
+            default: enemy = { id: performance.now(), x, y, size: 20, speed: 1.5 * speedMultiplier, hp: 20 * hpMultiplier, color: '#FF5733', type: 'grunt' };
         }
         enemies.push(enemy);
     }
 
     function updateEnemies() {
         enemies.forEach(e => {
-            const dx = player.x - e.x;
-            const dy = player.y - e.y;
+            const dx = player.x - e.x; const dy = player.y - e.y;
             const dist = Math.sqrt(dx * dx + dy * dy);
             
             if (e.type === 'shooter' || e.type === 'boss') {
-                if (dist > 250) { 
-                    e.x += (dx / dist) * e.speed; 
-                    e.y += (dy / dist) * e.speed; 
-                }
+                if (dist > 250) { e.x += (dx / dist) * e.speed; e.y += (dy / dist) * e.speed; }
                 const now = performance.now();
                 if (now - e.lastAttack > e.attackCooldown) {
                     e.lastAttack = now;
                     enemyProjectiles.push({ x: e.x, y: e.y, dx: (dx/dist)*3, dy: (dy/dist)*3, size: e.isBoss ? 12 : 8, color: '#FFFF00', damage: e.isBoss ? 25 : 15 });
                 }
-            } else {
-                e.x += (dx / dist) * e.speed;
-                e.y += (dy / dist) * e.speed;
+            } else { e.x += (dx / dist) * e.speed; e.y += (dy / dist) * e.speed; }
+        });
+    }
+
+    function findNearestEnemy(from) {
+        let nearest = null, minDistance = Infinity;
+        enemies.forEach(e => {
+            const dist = Math.sqrt((e.x - from.x)**2 + (e.y - from.y)**2);
+            if (dist < minDistance) { minDistance = dist; nearest = e; }
+        });
+        return nearest;
+    }
+    
+    function updateDrones(deltaTime) {
+        drones.forEach(d => {
+            // Movement
+            d.angle += d.speed * (deltaTime / 1000);
+            d.x = player.x + Math.cos(d.angle) * d.radius;
+            d.y = player.y + Math.sin(d.angle) * d.radius;
+
+            // Shooting
+            const now = performance.now();
+            if (now - d.lastShotTime > d.fireRate) {
+                const target = findNearestEnemy(d);
+                if (target) {
+                    d.lastShotTime = now;
+                    const dx = target.x - d.x; const dy = target.y - d.y;
+                    const dist = Math.sqrt(dx*dx+dy*dy);
+                    projectiles.push({ x: d.x, y: d.y, dx: (dx/dist)*5, dy: (dy/dist)*5, type: 'drone-bullet', color: '#9400D3', damage: d.damage });
+                }
             }
         });
     }
 
+
     function updateProjectiles(deltaTime) {
-        // Player projectiles
         const now = performance.now();
         if (now - player.lastShotTime > player.fireRate && enemies.length > 0) {
-            player.lastShotTime = now;
-            let nearestEnemy = null, minDistance = Infinity;
-            enemies.forEach(e => {
-                const dist = Math.sqrt((e.x - player.x)**2 + (e.y - player.y)**2);
-                if (dist < minDistance) { minDistance = dist; nearestEnemy = e; }
-            });
+            const nearestEnemy = findNearestEnemy(player);
             
             if (nearestEnemy) {
+                player.lastShotTime = now;
                 sounds.shoot();
-                for (let i = 0; i < player.projectiles; i++) {
-                    const angleOffset = (i - (player.projectiles - 1) / 2) * 0.2;
-                    const dx = nearestEnemy.x - player.x;
-                    const dy = nearestEnemy.y - player.y;
+                const dx = nearestEnemy.x - player.x; const dy = nearestEnemy.y - player.y;
+
+                if (player.weaponType === 'shotgun') {
+                    const weaponStats = WEAPON_SETTINGS['shotgun'];
+                    for (let i = 0; i < weaponStats.pellets; i++) {
+                        const angle = Math.atan2(dy, dx) + (Math.random() - 0.5) * weaponStats.spread;
+                        const speed = 8 + (Math.random() - 0.5) * 2;
+                        projectiles.push({ x: player.x, y: player.y, dx: Math.cos(angle) * speed, dy: Math.sin(angle) * speed, type: 'pellet', lifespan: 500, damage: player.projectileDamage });
+                    }
+                } else if (player.weaponType === 'laser') {
                     const dist = Math.sqrt(dx * dx + dy * dy);
                     const dirX = dx / dist; const dirY = dy / dist;
-                    const rotatedDirX = dirX * Math.cos(angleOffset) - dirY * Math.sin(angleOffset);
-                    const rotatedDirY = dirX * Math.sin(angleOffset) + dirY * Math.cos(angleOffset);
-                    
-                    let proj = { x: player.x, y: player.y, dx: rotatedDirX * 7, dy: rotatedDirY * 7, type: player.projectileType };
-                    if (proj.type === 'missile') { proj.target = nearestEnemy; proj.speed = 6; }
-                    if (proj.type === 'bomb') { proj.gravity = 0.05; proj.fuse = 1500; }
-                    projectiles.push(proj);
+                    projectiles.push({ x: player.x, y: player.y, endX: player.x + dirX * 1000, endY: player.y + dirY * 1000, type: 'laser', lifespan: 100, hitEnemies: new Set(), damage: player.projectileDamage });
+                } else if (player.weaponType === 'bow') {
+                    const angle = Math.atan2(dy, dx);
+                    const speed = 12;
+                    projectiles.push({ 
+                        x: player.x, y: player.y, 
+                        dx: Math.cos(angle) * speed, 
+                        dy: Math.sin(angle) * speed, 
+                        type: 'arrow', 
+                        gravity: 0.03, 
+                        damage: player.projectileDamage 
+                    });
+                } else {
+                    for (let i = 0; i < player.projectiles; i++) {
+                        const angleOffset = (i - (player.projectiles - 1) / 2) * 0.2;
+                        const dist = Math.sqrt(dx*dx+dy*dy);
+                        const dirX = dx / dist; const dirY = dy / dist;
+                        const rDirX = dirX * Math.cos(angleOffset) - dirY * Math.sin(angleOffset);
+                        const rDirY = dirX * Math.sin(angleOffset) + dirY * Math.cos(angleOffset);
+                        let proj = { x: player.x, y: player.y, dx: rDirX * 7, dy: rDirY * 7, type: player.projectileType, damage: player.projectileDamage };
+                        if (proj.type === 'missile') { proj.target = nearestEnemy; proj.speed = 6; }
+                        if (proj.type === 'bomb') { proj.gravity = 0.05; proj.fuse = 1500; }
+                        projectiles.push(proj);
+                    }
                 }
             }
         }
 
         projectiles.forEach((p, index) => {
+            if (p.lifespan) { p.lifespan -= deltaTime; if (p.lifespan <= 0) projectiles.splice(index, 1); }
+            if (p.type === 'laser') return;
+
             if (p.type === 'missile' && p.target && p.target.hp > 0) {
-                const dx = p.target.x - p.x; const dy = p.target.y - p.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-                p.dx = (dx / dist) * p.speed; p.dy = (dy / dist) * p.speed;
-            } else if (p.type === 'bomb') {
+                const dx = p.target.x - p.x; const dy = p.target.y - p.y; const dist = Math.sqrt(dx*dx+dy*dy);
+                if (dist > 5) { p.dx = (dx / dist) * p.speed; p.dy = (dy / dist) * p.speed; }
+            } else if (p.type === 'bomb' || p.type === 'arrow') {
                 p.dy += p.gravity;
-                p.fuse -= deltaTime;
-                if (p.fuse <= 0) {
-                    explosions.push({ x: p.x, y: p.y, radius: 80, duration: 200, alpha: 1, damage: player.projectileDamage });
-                    sounds.explosion();
-                    projectiles.splice(index, 1);
+                if (p.type === 'bomb') {
+                    p.fuse -= deltaTime;
+                    if (p.fuse <= 0) {
+                        explosions.push({ x: p.x, y: p.y, radius: 80, duration: 200, alpha: 1, damage: p.damage });
+                        sounds.explosion();
+                        projectiles.splice(index, 1);
+                    }
                 }
             }
             p.x += p.dx; p.y += p.dy;
@@ -624,59 +853,68 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function updateXPGems() {
         xpGems.forEach(gem => {
-            const dx = player.x - gem.x;
-            const dy = player.y - gem.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dx = player.x - gem.x; const dy = player.y - gem.y; const dist = Math.sqrt(dx*dx+dy*dy);
             if (dist < player.pickupRadius) {
-                const magnetSpeed = 4;
-                gem.x += (dx / dist) * magnetSpeed;
-                gem.y += (dy / dist) * magnetSpeed;
+                gem.x += (dx / dist) * 4; gem.y += (dy / dist) * 4;
             }
         });
     }
 
     function updateExplosions(deltaTime) {
-        explosions.forEach((exp, index) => {
-            exp.alpha -= deltaTime / exp.duration;
-            if (exp.alpha <= 0) {
-                explosions.splice(index, 1);
-            }
-        });
+        explosions.forEach((exp, i) => { exp.alpha -= deltaTime / exp.duration; if (exp.alpha <= 0) explosions.splice(i, 1); });
     }
     
     function updateOrbitalShields(deltaTime) {
-        orbitalShields.forEach((shield, index) => {
+        orbitalShields.forEach((shield, i) => {
             shield.angle += shield.speed * (deltaTime / 1000);
             shield.x = player.x + Math.cos(shield.angle) * shield.radius;
             shield.y = player.y + Math.sin(shield.angle) * shield.radius;
         });
     }
+    
+    function distToSegment(p, v, w) {
+        const l2 = (v.x - w.x)**2 + (v.y - w.y)**2;
+        if (l2 === 0) return Math.sqrt((p.x - v.x)**2 + (p.y - v.y)**2);
+        let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const px = v.x + t * (w.x - v.x);
+        const py = v.y + t * (w.y - v.y);
+        return Math.sqrt((p.x - px)**2 + (p.y - py)**2);
+    }
 
-    // --- Collision Detection ---
     function handleCollisions() {
-        projectiles = projectiles.filter(p => {
+        projectiles.forEach((p, pIndex) => {
+            if (p.type === 'laser') {
+                for (const e of enemies) {
+                    if (p.hitEnemies.has(e.id)) continue;
+                    if (distToSegment(e, {x:p.x, y:p.y}, {x:p.endX, y:p.endY}) < e.size / 2) {
+                        sounds.hit(); e.hp -= p.damage; p.hitEnemies.add(e.id);
+                    }
+                }
+                return;
+            }
             for (const e of enemies) {
                 if (Math.sqrt((p.x - e.x)**2 + (p.y - e.y)**2) < e.size / 2 + 5) {
-                    sounds.hit();
-                    e.hp -= player.projectileDamage;
-                    if (player.explosiveProjectiles || p.type === 'bomb') {
-                        let radius = p.type === 'bomb' ? 80 : 50;
-                        let damage = p.type === 'bomb' ? player.projectileDamage : player.projectileDamage / 2;
-                        explosions.push({ x: p.x, y: p.y, radius, duration: 200, alpha: 1, damage });
+                    sounds.hit(); e.hp -= p.damage;
+                    if (player.explosiveProjectiles || p.type === 'bomb' || p.type === 'missile') {
+                        explosions.push({ x: p.x, y: p.y, radius: p.type === 'bomb' || p.type === 'missile' ? 80 : 50, duration: 200, alpha: 1, damage: p.damage / 2 });
                         sounds.explosion();
                     }
-                    return false;
+                    projectiles.splice(pIndex, 1);
+                    return;
                 }
             }
-            return true;
         });
 
         explosions.forEach(exp => {
             enemies.forEach(e => {
                 if (Math.sqrt((exp.x - e.x)**2 + (exp.y - e.y)**2) < e.size / 2 + exp.radius) {
-                    e.hp -= exp.damage * (exp.alpha);
+                    e.hp -= exp.damage * exp.alpha;
                 }
             });
+            if(exp.playerDamage && Math.sqrt((exp.x - player.x)**2 + (exp.y - player.y)**2) < PLAYER_SIZE / 2 + exp.radius) {
+                if(player.invincibilityTimer <= 0) player.hp -= exp.playerDamage;
+            }
         });
         
         const now = performance.now();
@@ -688,79 +926,92 @@ document.addEventListener('DOMContentLoaded', () => {
                  }
             }
         });
-
-        let newXpGems = [], newHealthPacks = [], newNukes = [];
+        
+        let newDrops = { xp: [], hp: [], nuke: [], speed: [], fire: [], freeze: [], inv: []};
         enemies = enemies.filter(e => {
             if (e.hp <= 0) {
-                const value = e.isBoss ? 100 : (e.type === 'tank' ? 10 : (e.type === 'shooter' ? 5 : 2));
-                newXpGems.push({ x: e.x, y: e.y, value });
-                if (Math.random() < 0.08) newHealthPacks.push({ x: e.x, y: e.y });
-                if (Math.random() < 0.02) newNukes.push({ x: e.x, y: e.y });
+                if(e.type === 'bomber') {
+                    explosions.push({ x: e.x, y: e.y, radius: 80, duration: 300, alpha: 1, playerDamage: 20, damage: 50, color: 'rgba(255, 165, 0, 0.7)' });
+                    sounds.explosion();
+                }
+
+                const value = e.isBoss ? 100 : (e.type === 'tank' ? 15 : (e.type === 'bomber' ? 3 : (e.type === 'shooter' ? 5 : 2)));
+                newDrops.xp.push({ x: e.x, y: e.y, value });
+                if (Math.random() < 0.08) newDrops.hp.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.02) newDrops.nuke.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.03) newDrops.speed.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.03) newDrops.fire.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.02) newDrops.freeze.push({ x: e.x, y: e.y });
+                if (Math.random() < 0.015) newDrops.inv.push({ x: e.x, y: e.y });
                 return false;
             }
             return true;
         });
-        xpGems.push(...newXpGems);
-        healthPacks.push(...newHealthPacks);
-        nukes.push(...newNukes);
+        xpGems.push(...newDrops.xp); healthPacks.push(...newDrops.hp); nukes.push(...newDrops.nuke);
+        speedBoosts.push(...newDrops.speed); fireRateBoosts.push(...newDrops.fire);
+        freezeBombs.push(...newDrops.freeze); invincibilityShields.push(...newDrops.inv);
 
-        if (!player.isDashing) {
+        if (!player.isDashing && player.invincibilityTimer <= 0) {
             enemies.forEach(e => {
                 if (Math.sqrt((player.x - e.x)**2 + (player.y - e.y)**2) < PLAYER_SIZE / 2 + e.size / 2) {
                     player.hp -= 10;
+                    if(player.hp > 0) sounds.hit();
                 }
             });
             enemyProjectiles = enemyProjectiles.filter(p => {
                 if (Math.sqrt((player.x - p.x)**2 + (player.y - p.y)**2) < PLAYER_SIZE / 2 + p.size / 2) {
-                    player.hp -= p.damage; return false;
-                }
-                return true;
+                    player.hp -= p.damage; 
+                    if(player.hp > 0) sounds.hit();
+                    return false;
+                } return true;
             });
         }
         
         xpGems = xpGems.filter(gem => {
-            if (Math.sqrt((player.x - gem.x)**2 + (player.y - gem.y)**2) < PLAYER_SIZE / 2 + 5) {
-                sounds.xp(); player.xp += gem.value; return false;
-            }
-            return true;
+            if (Math.sqrt((player.x - gem.x)**2 + (player.y - gem.y)**2) < PLAYER_SIZE/2+5) { sounds.xp(); player.xp += gem.value; return false; } return true;
         });
         healthPacks = healthPacks.filter(pack => {
-            if (Math.sqrt((player.x - pack.x)**2 + (player.y - pack.y)**2) < PLAYER_SIZE / 2 + 10) {
-                sounds.heal(); player.hp = Math.min(player.maxHp, player.hp + 20); return false;
-            }
-            return true;
+            if (Math.sqrt((player.x - pack.x)**2 + (player.y - pack.y)**2) < PLAYER_SIZE/2+10) { sounds.heal(); player.hp = Math.min(player.maxHp, player.hp + 20 * player.healBonus); return false; } return true;
         });
         nukes = nukes.filter(nuke => {
-            if (Math.sqrt((player.x - nuke.x)**2 + (player.y - nuke.y)**2) < PLAYER_SIZE / 2 + 10) {
+            if (Math.sqrt((player.x - nuke.x)**2 + (player.y - nuke.y)**2) < PLAYER_SIZE/2+10) {
                 sounds.nuke();
-                enemies.forEach(e => {
-                    e.hp -= 200; // Nuke damage
-                    explosions.push({ x: e.x, y: e.y, radius: e.size * 1.5, duration: 500, alpha: 1, damage: 0 });
-                });
+                enemies.forEach(e => { if(!e.isBoss) e.hp -= 200; explosions.push({ x: e.x, y: e.y, radius: e.size * 1.5, duration: 500, alpha: 1, damage: 0 }); });
                 return false;
-            }
-            return true;
+            } return true;
+        });
+        speedBoosts = speedBoosts.filter(item => {
+            if (Math.sqrt((player.x - item.x)**2 + (player.y - item.y)**2) < PLAYER_SIZE / 2 + 10) {
+                sounds.powerup(); player.speedBoostTimer = 5000; player.speed = player.baseSpeed * 1.5; return false;
+            } return true;
+        });
+        fireRateBoosts = fireRateBoosts.filter(item => {
+            if (Math.sqrt((player.x - item.x)**2 + (player.y - item.y)**2) < PLAYER_SIZE / 2 + 10) {
+                sounds.powerup(); player.fireRateBoostTimer = 5000; player.fireRate = player.baseFireRate * 0.5; return false;
+            } return true;
+        });
+        freezeBombs = freezeBombs.filter(item => {
+            if (Math.sqrt((player.x - item.x)**2 + (player.y - item.y)**2) < PLAYER_SIZE / 2 + 10) {
+                sounds.freeze(); enemiesFrozen = true; enemiesFrozenTimer = 3000; return false;
+            } return true;
+        });
+        invincibilityShields = invincibilityShields.filter(item => {
+             if (Math.sqrt((player.x - item.x)**2 + (player.y - item.y)**2) < PLAYER_SIZE / 2 + 10) {
+                sounds.shieldUp(); player.invincibilityTimer = 5000; return false;
+            } return true;
         });
     }
 
-    // --- Game Flow ---
     function handleLevelUp() {
-        sounds.levelUp();
-        isPaused = true;
-        player.xp -= player.xpToNextLevel;
-        player.level++;
-        player.xpToNextLevel = Math.floor(player.xpToNextLevel * 1.5);
-        
+        sounds.levelUp(); isPaused = true;
+        player.xp -= player.xpToNextLevel; player.level++; player.xpToNextLevel = Math.floor(player.xpToNextLevel * 1.5);
         levelUpOptionsContainer.innerHTML = '';
         const shuffled = availableUpgrades.sort(() => 0.5 - Math.random());
         let options = shuffled.slice(0, 3);
         if (player.weaponType !== 'machine-gun' && !player.explosiveProjectiles) {
             const explosiveUpgrade = UPGRADES.find(u => u.id === 'explosive');
-            if(explosiveUpgrade && !options.includes(explosiveUpgrade)) {
-                options[0] = explosiveUpgrade;
-            }
+            if(explosiveUpgrade && !options.includes(explosiveUpgrade)) options[0] = explosiveUpgrade;
         }
-        
         options.forEach(opt => {
             const card = document.createElement('div');
             card.className = 'upgrade-card p-6 rounded-lg text-left w-64';
@@ -775,22 +1026,15 @@ document.addEventListener('DOMContentLoaded', () => {
         upgrade.apply(player);
         if(upgrade.id === 'shield') {
              const newShield = {
-                angle: (orbitalShields.length * Math.PI) / (player.shields / 2),
-                radius: 50,
-                speed: 3,
-                size: 15,
-                color: '#00FFFF',
-                damage: 25,
-                lastHitTime: 0
-            };
-            orbitalShields.push(newShield);
+                angle: (orbitalShields.length * Math.PI) / (player.shields / 2), radius: 50, speed: 3, size: 15,
+                color: '#FF00FF', damage: 25, lastHitTime: 0
+            }; orbitalShields.push(newShield);
         }
-        if(upgrade.id === 'explosive') {
-            availableUpgrades = availableUpgrades.filter(u => u.id !== upgrade.id); // Remove non-stackable
+        if(upgrade.id === 'explosive' || (upgrade.id === 'multishot' && player.projectiles > 4)) {
+            availableUpgrades = availableUpgrades.filter(u => u.id !== upgrade.id);
         }
-        isPaused = false;
-        levelUpScreen.classList.add('hidden');
-        lastTime = performance.now(); // Reset lastTime to avoid a large deltaTime jump
+        isPaused = false; levelUpScreen.classList.add('hidden');
+        lastTime = performance.now();
         requestAnimationFrame(gameLoop);
     }
     
@@ -802,7 +1046,6 @@ document.addEventListener('DOMContentLoaded', () => {
         pauseButton.classList.add('hidden');
     }
 
-    // --- Initialize ---
     init();
 });
 </script>
