@@ -254,7 +254,6 @@
 <script>
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM Elements ---
-    // FIX: Cast to HTMLCanvasElement to access canvas-specific properties and methods.
     const canvas = document.getElementById('game-canvas');
     const ctx = canvas.getContext('2d');
     const gameWrapper = document.getElementById('game-wrapper');
@@ -262,7 +261,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const pauseScreen = document.getElementById('pause-screen');
     const levelUpScreen = document.getElementById('levelup-screen');
     const gameOverScreen = document.getElementById('gameover-screen');
-    // FIX: Cast to HTMLButtonElement to access the 'disabled' property.
     const startButton = document.getElementById('start-button');
     const restartButton = document.getElementById('restart-button');
     const pauseButton = document.getElementById('pause-button');
@@ -276,12 +274,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Joystick UI
     const movementJoystickUI = document.getElementById('movement-joystick');
-    const attackJoystickUI = document.getElementById('attack-joystick');
-    // FIX: Cast querySelector result to HTMLElement to access style property.
     const movementJoystickHandle = movementJoystickUI.querySelector('.joystick-handle');
-    // FIX: Cast querySelector result to HTMLElement to access style property.
+    const attackJoystickUI = document.getElementById('attack-joystick');
     const attackJoystickHandle = attackJoystickUI.querySelector('.joystick-handle');
-
+    
     // UI Elements
     const levelUI = document.getElementById('level-ui');
     const timerUI = document.getElementById('timer-ui');
@@ -355,7 +351,6 @@ document.addEventListener('DOMContentLoaded', () => {
    
     // --- Audio ---
     let audioContext;
-    // FIX: Cast window to any to access legacy 'webkitAudioContext'.
     try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); }
     catch (e) { console.error("Web Audio API is not supported in this browser"); }
 
@@ -408,10 +403,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeTouchCount = 0;
 
     // Joystick State
-    const JOYSTICK_BASE_RADIUS = 60; // Half of joystick div width
-    const JOYSTICK_MAX_OFFSET = JOYSTICK_BASE_RADIUS - 30; // 30 is handle radius
-    let movementJoystickState = { active: false, x: 0, y: 0, dx: 0, dy: 0, touchId: null };
+    const JOYSTICK_BASE_RADIUS = 60;
+    const JOYSTICK_MAX_OFFSET = JOYSTICK_BASE_RADIUS - 30;
+    let movementJoystickState = { active: false, x: 0, y: 0, dx: 0, dy: 0, touchId: null, startTime: 0, startX: 0, startY: 0 };
     let attackJoystickState = { active: false, x: 0, y: 0, dx: 0, dy: 0, touchId: null };
+
 
     // --- Upgrades ---
     const UPGRADES = [
@@ -464,6 +460,22 @@ document.addEventListener('DOMContentLoaded', () => {
             requestAnimationFrame(gameLoop);
         }
     }
+    
+    function triggerDash() {
+        if (gameState !== 'playing' || isPaused) return;
+        const now = performance.now();
+        if (now - player.lastDashTime > player.dashCooldown) {
+            if (player.decoyCharges > 0) {
+                player.decoyCharges--;
+                decoys.push({ x: player.x, y: player.y, lifespan: 4000 });
+                playSound('sine', 200, 0.2, 0.3);
+            }
+            player.isDashing = true;
+            player.lastDashTime = now;
+            sounds.dash();
+            setTimeout(() => player.isDashing = false, player.dashDuration);
+        }
+    }
 
     // --- Input Handling ---
     function getCanvasCoordinates(clientX, clientY) {
@@ -479,32 +491,42 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleTouchStart(e) {
         e.preventDefault();
         const rect = gameWrapper.getBoundingClientRect();
+        const now = e.timeStamp;
+
         for (const touch of e.changedTouches) {
-            activeTouchCount++;
-            const touchX = touch.clientX;
-            // Left side for movement
-            if (touchX < rect.left + rect.width / 2) {
-                if (!movementJoystickState.active) {
-                    movementJoystickState = {
-                        active: true, touchId: touch.identifier, x: touch.clientX, y: touch.clientY, dx: 0, dy: 0,
-                    };
-                    movementJoystickUI.style.left = `${touch.clientX - rect.left - JOYSTICK_BASE_RADIUS}px`;
-                    movementJoystickUI.style.top = `${touch.clientY - rect.top - JOYSTICK_BASE_RADIUS}px`;
-                    movementJoystickUI.classList.remove('hidden');
-                }
-            }
-            // Right side for attack
-            else {
-                if (!attackJoystickState.active) {
-                    attackJoystickState = {
-                        active: true, touchId: touch.identifier, x: touch.clientX, y: touch.clientY, dx: 0, dy: 0,
-                    };
-                    attackJoystickUI.style.left = `${touch.clientX - rect.left - JOYSTICK_BASE_RADIUS}px`;
-                    attackJoystickUI.style.top = `${touch.clientY - rect.top - JOYSTICK_BASE_RADIUS}px`;
-                    attackJoystickUI.classList.remove('hidden');
-                }
+            const isLeftHalf = touch.clientX < window.innerWidth / 2;
+
+            if (isLeftHalf && !movementJoystickState.active) {
+                const state = movementJoystickState;
+                state.active = true;
+                state.touchId = touch.identifier;
+                state.x = touch.clientX;
+                state.y = touch.clientY;
+                state.startX = touch.clientX;
+                state.startY = touch.clientY;
+                state.startTime = now;
+                state.dx = 0;
+                state.dy = 0;
+                
+                movementJoystickUI.style.left = `${touch.clientX - rect.left - JOYSTICK_BASE_RADIUS}px`;
+                movementJoystickUI.style.top = `${touch.clientY - rect.top - JOYSTICK_BASE_RADIUS}px`;
+                movementJoystickUI.classList.remove('hidden');
+
+            } else if (!isLeftHalf && !attackJoystickState.active) {
+                const state = attackJoystickState;
+                state.active = true;
+                state.touchId = touch.identifier;
+                state.x = touch.clientX;
+                state.y = touch.clientY;
+                state.dx = 0;
+                state.dy = 0;
+                
+                attackJoystickUI.style.left = `${touch.clientX - rect.left - JOYSTICK_BASE_RADIUS}px`;
+                attackJoystickUI.style.top = `${touch.clientY - rect.top - JOYSTICK_BASE_RADIUS}px`;
+                attackJoystickUI.classList.remove('hidden');
             }
         }
+        activeTouchCount = e.touches.length;
     }
 
     function handleTouchMove(e) {
@@ -512,7 +534,6 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const touch of e.changedTouches) {
             let state = null;
             let handle = null;
-
             if (touch.identifier === movementJoystickState.touchId) {
                 state = movementJoystickState;
                 handle = movementJoystickHandle;
@@ -521,7 +542,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 handle = attackJoystickHandle;
             }
 
-            if (state) {
+            if (state && handle) {
                 const deltaX = touch.clientX - state.x;
                 const deltaY = touch.clientY - state.y;
                 const dist = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
@@ -542,20 +563,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleTouchEnd(e) {
         e.preventDefault();
+        const now = e.timeStamp;
         for (const touch of e.changedTouches) {
-            activeTouchCount = Math.max(0, activeTouchCount - 1);
             if (touch.identifier === movementJoystickState.touchId) {
-                movementJoystickState.active = false;
-                movementJoystickState.touchId = null;
+                const state = movementJoystickState;
+                const duration = now - state.startTime;
+                const dist = Math.sqrt((touch.clientX - state.startX)**2 + (touch.clientY - state.startY)**2);
+
+                if (duration < 200 && dist < 20) { // Tap detection
+                    triggerDash();
+                }
+
+                state.active = false;
+                state.touchId = null;
+                state.dx = 0;
+                state.dy = 0;
                 movementJoystickUI.classList.add('hidden');
                 movementJoystickHandle.style.transform = 'translate(0, 0)';
             } else if (touch.identifier === attackJoystickState.touchId) {
-                attackJoystickState.active = false;
-                attackJoystickState.touchId = null;
+                const state = attackJoystickState;
+                state.active = false;
+                state.touchId = null;
+                state.dx = 0;
+                state.dy = 0;
                 attackJoystickUI.classList.add('hidden');
                 attackJoystickHandle.style.transform = 'translate(0, 0)';
             }
         }
+        activeTouchCount = e.touches.length;
     }
 
 
@@ -565,7 +600,6 @@ document.addEventListener('DOMContentLoaded', () => {
         startScreenHighscoreUI.innerHTML = `최고 기록: ${formatTime(highScore)} &bull; 랭크: <span style="color: ${rank.color}; text-shadow: 0 0 8px ${rank.color};">${rank.name}</span>`;
         
         difficultySelection.addEventListener('click', e => {
-            // FIX: Cast event target to HTMLElement to access properties like tagName and dataset.
             const target = e.target;
             if (target.tagName === 'BUTTON' && target.dataset.difficulty) {
                 selectedDifficulty = target.dataset.difficulty;
@@ -576,7 +610,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         weaponSelection.addEventListener('mouseover', e => {
-            // FIX: Cast event target to HTMLElement to access properties like tagName and dataset.
             const target = e.target;
             if (target.tagName === 'BUTTON' && target.dataset.weapon) {
                 const weaponId = target.dataset.weapon;
@@ -591,7 +624,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         weaponSelection.addEventListener('click', e => {
-            // FIX: Cast event target to HTMLElement to access properties like tagName and dataset.
             const target = e.target;
             if (target.tagName === 'BUTTON') {
                 selectedWeapon = target.dataset.weapon;
@@ -601,10 +633,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         
-        // FIX: Cast querySelector result to HTMLElement to access click method.
         const defaultDifficulty = difficultySelection.querySelector('[data-difficulty="보통"]');
         if(defaultDifficulty) defaultDifficulty.click();
-        // FIX: Cast querySelector result to HTMLElement to access click method.
         const defaultWeapon = weaponSelection.querySelector('[data-weapon="machine-gun"]');
         if(defaultWeapon) defaultWeapon.click();
 
@@ -635,19 +665,8 @@ document.addEventListener('DOMContentLoaded', () => {
         window.addEventListener('keydown', e => {
             keysPressed[e.code] = true;
             if (e.key === "Escape") togglePause();
-            if (e.code === 'Space' && gameState === 'playing' && !isPaused) {
-                const now = performance.now();
-                if (now - player.lastDashTime > player.dashCooldown) {
-                    if (player.decoyCharges > 0) {
-                        player.decoyCharges--;
-                        decoys.push({ x: player.x, y: player.y, lifespan: 4000 });
-                        playSound('sine', 200, 0.2, 0.3);
-                    }
-                    player.isDashing = true;
-                    player.lastDashTime = now;
-                    sounds.dash();
-                    setTimeout(() => player.isDashing = false, player.dashDuration);
-                }
+            if (e.code === 'Space') {
+                triggerDash();
             }
         });
         window.addEventListener('keyup', e => { keysPressed[e.code] = false; });
@@ -713,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pauseScreen.classList.add('hidden');
         pauseButton.classList.remove('hidden');
         
-        for (let i = 0; i < 3; i++) spawnExplosiveBarrel();
+        // for (let i = 0; i < 3; i++) spawnExplosiveBarrel();
 
         updateUI();
         if (animationFrameId) cancelAnimationFrame(animationFrameId);
@@ -838,35 +857,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Player Shooting
         const canShoot = now - player.lastShotTime > player.fireRate;
-        if (canShoot) {
-            let isAttacking = false;
-            let aimDx = 0, aimDy = 0;
+        let isShooting = false;
+        let aimDx = 0, aimDy = 0;
+        let hasTarget = false;
 
-            if (attackJoystickState.active && (attackJoystickState.dx !== 0 || attackJoystickState.dy !== 0)) {
-                isAttacking = true;
+        // Touch controls
+        if (attackJoystickState.active) {
+            isShooting = true;
+            // If joystick is moved, use its direction for manual aim
+            if (Math.abs(attackJoystickState.dx) > 0.1 || Math.abs(attackJoystickState.dy) > 0.1) {
                 aimDx = attackJoystickState.dx;
                 aimDy = attackJoystickState.dy;
-            } else if (activeTouchCount === 0) { // Desktop aiming
-                isAttacking = true;
-                const dx = mousePos.x - player.x;
-                const dy = mousePos.y - player.y;
-                const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                hasTarget = true;
+            } else { // If joystick is just held, auto-aim
+                const nearestEnemy = findNearestEnemy(player);
+                if (nearestEnemy) {
+                    const dx = nearestEnemy.x - player.x;
+                    const dy = nearestEnemy.y - player.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+                    aimDx = dx / dist;
+                    aimDy = dy / dist;
+                    hasTarget = true;
+                } else {
+                    isShooting = false;
+                }
+            }
+        } 
+        // Desktop controls (mouse aim)
+        else if (activeTouchCount === 0) {
+            isShooting = true;
+            const dx = mousePos.x - player.x;
+            const dy = mousePos.y - player.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist > PLAYER_SIZE / 2) { // Don't shoot if mouse is on player
                 aimDx = dx / dist;
                 aimDy = dy / dist;
+                hasTarget = true;
+            } else {
+                isShooting = false;
             }
+        }
 
-            if (isAttacking) {
-                player.lastShotTime = now;
-                if (player.weaponType === 'spirit-caller') sounds.summon(); else sounds.shoot();
-                
-                for (let i = 0; i < player.projectiles; i++) {
-                    let angleOffset = 0;
-                    if (player.projectiles > 1 && player.weaponType !== 'spirit-caller') {
-                        angleOffset = (i - (player.projectiles - 1) / 2) * 0.15;
-                    }
-                    const angle = Math.atan2(aimDy, aimDx) + angleOffset;
-                    createProjectile(player.x, player.y, Math.cos(angle), Math.sin(angle), player.projectileType);
+        if (isShooting && canShoot && hasTarget) {
+            player.lastShotTime = now;
+            if (player.weaponType === 'spirit-caller') sounds.summon(); else sounds.shoot();
+            
+            const dist = Math.sqrt(aimDx * aimDx + aimDy * aimDy) || 1;
+            const finalAimDx = aimDx / dist;
+            const finalAimDy = aimDy / dist;
+
+            for (let i = 0; i < player.projectiles; i++) {
+                let angleOffset = 0;
+                if (player.projectiles > 1 && player.weaponType !== 'spirit-caller') {
+                    angleOffset = (i - (player.projectiles - 1) / 2) * 0.15;
                 }
+                const angle = Math.atan2(finalAimDy, finalAimDx) + angleOffset;
+                createProjectile(player.x, player.y, Math.cos(angle), Math.sin(angle), player.projectileType);
             }
         }
         
@@ -1029,8 +1075,10 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if(e.type === 'tank' || e.isBoss) {
                 const hpPercentage = e.hp / (ENEMY_TYPES[e.type].hp * DIFFICULTY_SETTINGS[selectedDifficulty].enemyHpMult);
+                ctx.shadowBlur = 0;
                 ctx.fillStyle = '#444'; ctx.fillRect(e.x - e.size/2, e.y - e.size/2 - 10, e.size, 5);
                 ctx.fillStyle = '#f00'; ctx.fillRect(e.x - e.size/2, e.y - e.size/2 - 10, e.size * hpPercentage, 5);
+                ctx.shadowBlur = 10;
             }
         });
 
@@ -1226,7 +1274,6 @@ document.addEventListener('DOMContentLoaded', () => {
         projectiles.forEach((p, index) => {
             p.lifespan -= deltaTime;
             if (p.lifespan <= 0 || p.x < -10 || p.x > CANVAS_WIDTH + 10 || p.y < -10 || p.y > CANVAS_HEIGHT + 10) {
-                // FIX: Separate logic for missile and bomb to resolve union type errors.
                 if (p.type === 'missile') {
                     const weaponStats = WEAPON_SETTINGS['missile'];
                     explosions.push({ x: p.x, y: p.y, radius: weaponStats.explosionRadius, duration: 300, alpha: 1, damage: p.damage });
