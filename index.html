@@ -256,9 +256,9 @@
                   <button class="button-retro selection-button" data-weapon="black-hole-generator">블랙홀</button>
                   <button class="button-retro selection-button" data-weapon="plasma-cannon">플라즈마</button>
                   <button class="button-retro selection-button" data-weapon="ricochet-blade">리코</button>
-                  <button class="button-retro selection-button" data-weapon="vortex-cannon">볼텍스 캐논</button>
-                  <button class="button-retro selection-button" data-weapon="glitch-pulser">글리치 펄서</button>
-                  <button class="button-retro selection-button" data-weapon="cryo-blaster">크라이오 블래스터</button>
+                  <button class="button-retro selection-button" data-weapon="chrono-repeater">크로노 리피터</button>
+                  <button class="button-retro selection-button" data-weapon="quantum-boomerang">퀀텀 부메랑</button>
+                  <button class="button-retro selection-button" data-weapon="singularity-cannon">특이점포</button>
               </div>
           </div>
 
@@ -388,9 +388,9 @@ document.addEventListener('DOMContentLoaded', () => {
         'black-hole-generator': { fireRate: 2000, damage: 0, projectileType: 'black-hole-orb', name: '블랙홀 생성기', description: '적을 끌어당기고 지속 피해를 주는 소형 블랙홀을 발사합니다.' },
         'plasma-cannon': { fireRate: 1800, damage: 50, projectileType: 'plasma-ball', name: '플라즈마 캐논', explosionRadius: 80, burnDamage: 10, burnDuration: 3000, description: '느리지만 강력한 플라즈마 구체를 발사합니다. 구체는 폭발하며 3초간 화상 피해를 입힙니다.' },
         'ricochet-blade': { fireRate: 750, damage: 20, projectileType: 'ricochet-blade', name: '리코셰 블레이드', bounces: 3, description: '적에게 튕기는 회전 칼날을 발사하여 최대 4명의 적을 공격합니다.' },
-        'vortex-cannon': { fireRate: 2200, damage: 10, projectileType: 'vortex-orb', name: '볼텍스 캐논', description: '적을 끌어당기며 지속 피해를 주는 소용돌이를 생성하는 구체를 발사합니다.' },
-        'glitch-pulser': { fireRate: 900, damage: 15, projectileType: 'glitch-pulse', name: '글리치 펄서', stunChance: 0.2, stunDuration: 1000, description: '짧은 거리의 적들을 관통하는 에너지 파동을 방출합니다. 피격된 적은 확률적으로 잠시 기절합니다.' },
-        'cryo-blaster': { fireRate: 850, damage: 18, projectileType: 'cryo-shard', name: '크라이오 블래스터', slowAmount: 0.4, slowDuration: 1500, freezeOnNthShot: 5, freezeDuration: 1000, description: '적을 느리게 만드는 얼음 파편을 발사합니다. 5번째 공격마다 적을 잠시 얼립니다.'}
+        'chrono-repeater': { fireRate: 700, damage: 20, projectileType: 'chrono-shot', name: '크로노 리피터', slowFieldRadius: 70, slowAmount: 0.6, slowDuration: 2000, description: '적중 시 시간 왜곡장을 생성하여 주변 적을 2초간 60% 느리게 만듭니다.' },
+        'quantum-boomerang': { fireRate: 1200, damage: 35, projectileType: 'quantum-boomerang', name: '퀀텀 부메랑', range: 250, description: '적을 관통하며 날아갔다가 돌아오는 부메랑을 던집니다. 돌아올 때도 피해를 줍니다.' },
+        'singularity-cannon': { fireRate: 2500, damage: 10, projectileType: 'singularity-orb', name: '특이점포', explosionDamage: 150, explosionRadius: 150, description: '느린 특이점 구체를 발사합니다. 구체를 다시 맞추면 거대한 폭발을 일으킵니다.' },
     };
    
     // --- Audio ---
@@ -434,7 +434,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedDifficulty, selectedWeapon;
     let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, nukes, explosions;
     let orbitalShields, speedBoosts, fireRateBoosts, freezeBombs, invincibilityShields, blackHoleItems;
-    let drones, explosiveBarrels, blackHoles, vortexes;
+    let drones, explosiveBarrels, blackHoles;
     let holographicDecoys, decoys;
     let magnets, xpBombs;
     let damageTexts;
@@ -739,30 +739,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     projectile.bounceRange = 200;
                     projectile.hitEnemies = new Set();
                     break;
-                case 'vortex-orb':
-                    projectile.vx = Math.cos(angle) * 150;
-                    projectile.vy = Math.sin(angle) * 150;
-                    projectile.lifetime = 2500;
-                    break;
-                case 'glitch-pulse':
-                    projectile.vx = Math.cos(angle) * 400;
-                    projectile.vy = Math.sin(angle) * 400;
-                    projectile.lifetime = 250;
-                    projectile.pierce = true;
-                    projectile.width = 40;
-                    projectile.stunChance = weapon.stunChance;
-                    projectile.stunDuration = weapon.stunDuration;
-                    break;
-                case 'cryo-shard':
-                    player.machineGunShotCount = (player.machineGunShotCount || 0) + 1;
-                    projectile.vx = Math.cos(angle) * 400;
-                    projectile.vy = Math.sin(angle) * 400;
+                case 'chrono-shot':
+                    projectile.vx = Math.cos(angle) * 350;
+                    projectile.vy = Math.sin(angle) * 350;
+                    projectile.slowFieldRadius = weapon.slowFieldRadius;
                     projectile.slowAmount = weapon.slowAmount;
                     projectile.slowDuration = weapon.slowDuration;
-                    if (player.machineGunShotCount % weapon.freezeOnNthShot === 0) {
-                        projectile.shouldFreeze = true;
-                        projectile.freezeDuration = weapon.freezeDuration;
-                    }
+                    break;
+                case 'quantum-boomerang':
+                    projectile.vx = Math.cos(angle) * 300;
+                    projectile.vy = Math.sin(angle) * 300;
+                    projectile.pierce = true;
+                    projectile.range = weapon.range;
+                    projectile.distanceTraveled = 0;
+                    projectile.isReturning = false;
+                    projectile.angularVelocity = 5;
+                    projectile.rotation = 0;
+                    projectile.hitEnemies = new Set();
+                    break;
+                case 'singularity-orb':
+                    projectile.vx = Math.cos(angle) * 80;
+                    projectile.vy = Math.sin(angle) * 80;
+                    projectile.lifetime = 8000;
+                    projectile.explosionDamage = weapon.explosionDamage;
+                    projectile.explosionRadius = weapon.explosionRadius;
+                    projectile.hittable = true;
                     break;
                 case 'bullet':
                 default:
@@ -938,6 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
             for (let i = projArray.length - 1; i >= 0; i--) {
                 const proj = projArray[i];
                 proj.lifetime -= deltaTime * 1000;
+                let projectileRemoved = false;
 
                 if (proj.type === 'missile' && proj.target && proj.target.hp > 0) {
                     const angle = Math.atan2(proj.target.y - proj.y, proj.target.x - proj.x);
@@ -979,16 +981,32 @@ document.addEventListener('DOMContentLoaded', () => {
                        proj.x += (dx / dist) * 1000 * deltaTime;
                        proj.y += (dy / dist) * 1000 * deltaTime;
                     }
-                } else if (proj.type === 'black-hole-orb' || proj.type === 'vortex-orb') {
+                } else if (proj.type === 'black-hole-orb') {
                     proj.x += proj.vx * deltaTime;
                     proj.y += proj.vy * deltaTime;
                     if (proj.lifetime < 10) {
-                        if (proj.type === 'black-hole-orb') {
-                            blackHoles.push({ x: proj.x, y: proj.y, radius: 10, maxRadius: 120, lifetime: 5000, pullForce: 250, damage: 15 });
-                        } else { // vortex-orb
-                            vortexes.push({ x: proj.x, y: proj.y, radius: 10, maxRadius: 100, lifetime: 4000, pullForce: 300, damage: 10, rotation: 0 });
+                        blackHoles.push({ x: proj.x, y: proj.y, radius: 10, maxRadius: 120, lifetime: 5000, pullForce: 250, damage: 15 });
+                    }
+                } else if (proj.type === 'quantum-boomerang') {
+                    proj.rotation += proj.angularVelocity * deltaTime;
+                    if (!proj.isReturning) {
+                        const travel = Math.hypot(proj.vx * deltaTime, proj.vy * deltaTime);
+                        proj.distanceTraveled += travel;
+                        if (proj.distanceTraveled >= proj.range) {
+                            proj.isReturning = true;
+                            proj.hitEnemies.clear(); 
+                        }
+                    } else {
+                        const returnAngle = Math.atan2(player.y - proj.y, player.x - proj.x);
+                        const returnSpeed = 300;
+                        proj.vx = Math.cos(returnAngle) * returnSpeed;
+                        proj.vy = Math.sin(returnAngle) * returnSpeed;
+                        if (Math.hypot(player.x - proj.x, player.y - proj.y) < PLAYER_SIZE) {
+                            proj.lifetime = 0;
                         }
                     }
+                    proj.x += proj.vx * deltaTime;
+                    proj.y += proj.vy * deltaTime;
                 } else {
                     proj.x += proj.vx * deltaTime;
                     proj.y += proj.vy * deltaTime;
@@ -1021,12 +1039,41 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             });
                         }
+                    } else if (proj.type === 'chrono-shot') {
+                        enemies.forEach(e => {
+                            if (Math.hypot(e.x - proj.x, e.y - proj.y) < proj.slowFieldRadius) {
+                                e.slowTimer = proj.slowDuration;
+                                e.slowAmount = 1 - proj.slowAmount;
+                            }
+                        });
                     }
                     projArray.splice(i, 1);
                     continue;
                 }
 
                 if (proj.owner === 'player') {
+                    // Singularity orb detonation check
+                    if (!proj.hittable) { 
+                        for (let k = projectiles.length - 1; k >= 0; k--) {
+                            const orb = projectiles[k];
+                            if (i === k || !orb.hittable) continue;
+
+                            if (Math.hypot(proj.x - orb.x, proj.y - orb.y) < 10) {
+                                createExplosion(orb.x, orb.y, orb.explosionRadius, orb.explosionDamage);
+                                projectiles.splice(k, 1);
+                                if (k < i) i--; 
+                                
+                                if (!proj.pierce) {
+                                    projArray.splice(i, 1);
+                                    projectileRemoved = true;
+                                }
+                                break; 
+                            }
+                        }
+                    }
+                    if (projectileRemoved) continue;
+
+                    // Enemy collision check
                     for (let j = enemies.length - 1; j >= 0; j--) {
                         const enemy = enemies[j];
                         if (proj.hitEnemies && proj.hitEnemies.has(enemy)) continue;
@@ -1047,31 +1094,31 @@ document.addEventListener('DOMContentLoaded', () => {
                                 enemy.x += Math.cos(angle) * proj.knockback;
                                 enemy.y += Math.sin(angle) * proj.knockback;
                             }
-                            if(proj.slowAmount){
+                            if(proj.slowAmount && proj.type !== 'chrono-shot'){
                                 enemy.slowTimer = proj.slowDuration;
                                 enemy.slowAmount = 1 - proj.slowAmount;
                             }
-                            if(proj.shouldFreeze){
-                                enemy.freezeTimer = proj.freezeDuration;
-                                sounds.freeze();
+                            if(proj.type === 'chrono-shot') {
+                                enemies.forEach(e => {
+                                    if (Math.hypot(e.x - proj.x, e.y - proj.y) < proj.slowFieldRadius) {
+                                        e.slowTimer = proj.slowDuration;
+                                        e.slowAmount = 1 - proj.slowAmount;
+                                    }
+                                });
                             }
-                            if(proj.stunChance && Math.random() < proj.stunChance) {
-                                enemy.stunTimer = proj.stunDuration;
-                            }
-
+                            
                             if (proj.explosive) {
                                 createExplosion(proj.x, proj.y, proj.explosionRadius, proj.damage / 2);
                             }
                             
-                            if (proj.type === 'ricochet-blade' || proj.type === 'lightning') { // For now, lightning is handled differently
+                            if (proj.type === 'ricochet-blade' || proj.type === 'lightning') { 
                                 if(proj.hitEnemies) proj.hitEnemies.add(enemy);
-
                                 if (proj.bouncesLeft > 0) {
                                     proj.bouncesLeft--;
                                     let nextTarget = null;
                                     let minDistance = proj.bounceRange;
                                     enemies.forEach(e => {
-                                        if (!proj.hitEnemies.has(e) && e.hp > 0) {
+                                        if (!(proj.hitEnemies && proj.hitEnemies.has(e)) && e.hp > 0) {
                                             const d = Math.hypot(e.x - enemy.x, e.y - enemy.y);
                                             if (d < minDistance) {
                                                 minDistance = d;
@@ -1085,13 +1132,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                         proj.vx = Math.cos(angle) * speed;
                                         proj.vy = Math.sin(angle) * speed;
                                     } else {
-                                        projArray.splice(i, 1);
+                                       projArray.splice(i, 1);
                                     }
                                 } else {
                                    projArray.splice(i, 1);
                                 }
                             } else if (!proj.pierce) {
                                 projArray.splice(i, 1);
+                            } else if (proj.hitEnemies) {
+                                proj.hitEnemies.add(enemy);
                             }
                             
                             break; 
@@ -1147,38 +1196,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     enemy.x += (dx / dist) * bh.pullForce * deltaTime;
                     enemy.y += (dy / dist) * bh.pullForce * deltaTime;
                     if(dist < 15) takeDamage(enemy, bh.damage * deltaTime * 5); // Increased damage close to center
-                }
-            });
-        }
-    }
-    
-    function updateVortexes(deltaTime) {
-        for (let i = vortexes.length - 1; i >= 0; i--) {
-            const vortex = vortexes[i];
-            vortex.lifetime -= deltaTime * 1000;
-            if (vortex.lifetime <= 0) {
-                vortexes.splice(i, 1);
-                continue;
-            }
-             if(vortex.radius < vortex.maxRadius) vortex.radius += 60 * deltaTime;
-             vortex.rotation += 2 * deltaTime;
-
-            enemies.forEach(enemy => {
-                const dx = vortex.x - enemy.x;
-                const dy = vortex.y - enemy.y;
-                let dist = Math.hypot(dx, dy);
-                if (dist < vortex.radius && dist > 1) {
-                    // Pull towards center
-                    enemy.x += (dx / dist) * vortex.pullForce * deltaTime;
-                    enemy.y += (dy / dist) * vortex.pullForce * deltaTime;
-                    
-                    // Add rotational velocity
-                    const pullAngle = Math.atan2(dy, dx);
-                    const rotationalAngle = pullAngle + Math.PI / 2; // Perpendicular to pull direction
-                    enemy.x += Math.cos(rotationalAngle) * vortex.pullForce * 0.5 * deltaTime;
-                    enemy.y += Math.sin(rotationalAngle) * vortex.pullForce * 0.5 * deltaTime;
-                    
-                    takeDamage(enemy, vortex.damage * deltaTime);
                 }
             });
         }
@@ -1293,9 +1310,22 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (p.type === 'missile') {
                 ctx.fillStyle = '#ff9900';
                 ctx.shadowColor = '#ff9900';
-            } else if (p.type === 'cryo-shard') {
-                ctx.fillStyle = p.shouldFreeze ? '#ffffff' : '#99ccff';
-                ctx.shadowColor = p.shouldFreeze ? '#ffffff' : '#99ccff';
+            } else if (p.type === 'chrono-shot') {
+                ctx.fillStyle = '#f0f';
+                ctx.shadowColor = '#f0f';
+            } else if (p.type === 'quantum-boomerang') {
+                ctx.fillStyle = '#00ffff';
+                ctx.shadowColor = '#00ffff';
+            } else if (p.type === 'singularity-orb') {
+                const pulse = 1 + Math.sin(performance.now() / 100) * 0.2;
+                ctx.fillStyle = '#4c004c';
+                ctx.shadowColor = '#ff00ff';
+                ctx.shadowBlur = 15;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 8 * pulse, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+                return;
             } else {
                 ctx.fillStyle = 'white';
                 ctx.shadowColor = 'white';
@@ -1310,13 +1340,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 ctx.fill();
                 ctx.fillStyle = '#00ffff';
                 ctx.fillRect(-12, -2, 24, 4);
-            } else if (p.type === 'glitch-pulse') {
-                ctx.globalAlpha = p.lifetime / 250;
-                ctx.fillStyle = `rgba(255, 0, 255, ${0.5 + Math.random() * 0.5})`;
-                ctx.shadowColor = '#ff00ff';
+            } else if (p.type === 'quantum-boomerang') {
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation);
                 ctx.beginPath();
-                ctx.arc(p.x, p.y, p.width / 2, 0, Math.PI * 2);
+                ctx.arc(0, 0, 10, 0, Math.PI * 1.5);
+                ctx.lineTo(0,0);
+                ctx.closePath();
                 ctx.fill();
+            } else if (p.type === 'chrono-shot') {
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(performance.now() / 200);
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                ctx.lineTo(0, -4);
+                ctx.stroke();
+                ctx.restore();
             }
             else {
                 ctx.beginPath();
@@ -1366,7 +1411,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             ctx.save();
             ctx.beginPath();
-            ctx.arc(exp.x, exp.y, currentRadius, 0, Math.PI * 2);
+            ctx.arc(exp.x, exp.y, Math.max(0, currentRadius), 0, Math.PI * 2);
             ctx.fillStyle = `rgba(255, 255, 0, ${1 - progress})`;
             ctx.shadowColor = '#ff0';
             ctx.shadowBlur = 20;
@@ -1406,41 +1451,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.beginPath();
             ctx.arc(bh.x, bh.y, bh.radius, 0, Math.PI * 2);
             ctx.fill();
-            ctx.restore();
-        });
-        
-        // Vortexes
-        vortexes.forEach(v => {
-            ctx.save();
-            ctx.translate(v.x, v.y);
-            ctx.rotate(v.rotation);
-            const gradient = ctx.createRadialGradient(0, 0, v.radius / 5, 0, 0, v.radius);
-            gradient.addColorStop(0, 'rgba(255, 255, 255, 0)');
-            gradient.addColorStop(0.8, 'rgba(0, 255, 255, 0.3)');
-            gradient.addColorStop(1, 'rgba(0, 255, 255, 0.6)');
-            ctx.fillStyle = gradient;
-
-            for (let i = 0; i < 5; i++) {
-                ctx.beginPath();
-                const angle = (i / 5) * Math.PI * 2;
-                ctx.moveTo(0,0);
-                ctx.quadraticCurveTo(
-                    Math.cos(angle + v.rotation) * v.radius * 0.5,
-                    Math.sin(angle + v.rotation) * v.radius * 0.5,
-                    Math.cos(angle) * v.radius,
-                    Math.sin(angle) * v.radius
-                );
-                ctx.lineTo(
-                     Math.cos(angle + 0.1) * v.radius,
-                     Math.sin(angle + 0.1) * v.radius
-                );
-                ctx.quadraticCurveTo(
-                    Math.cos(angle + 0.1 + v.rotation) * v.radius * 0.5,
-                    Math.sin(angle + 0.1 + v.rotation) * v.radius * 0.5,
-                    0,0
-                );
-                ctx.fill();
-            }
             ctx.restore();
         });
     }
@@ -1484,7 +1494,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateProjectiles(deltaTime);
         updateItems(deltaTime);
         updateBlackHoles(deltaTime);
-        updateVortexes(deltaTime);
         checkCollisions();
 
         if (performance.now() - lastKillTime > COMBO_TIMEOUT) {
@@ -1547,7 +1556,6 @@ document.addEventListener('DOMContentLoaded', () => {
         explosions = [];
         damageTexts = [];
         blackHoles = [];
-        vortexes = [];
         
         player = createInitialPlayer(selectedDifficulty, selectedWeapon);
         
