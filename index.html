@@ -432,8 +432,8 @@ document.addEventListener('DOMContentLoaded', () => {
             weaponType: weapon,
             fireRate: weaponSettings.fireRate, baseFireRate: weaponSettings.fireRate,
             projectiles: 1, projectileDamage: weaponSettings.damage, projectileType: weaponSettings.projectileType,
-            lastShotTime: 0, speed: 200, baseSpeed: 200, pickupRadius: 100,
-            dashCooldown: 2000, lastDashTime: 0, isDashing: false, dashDuration: 150, dashSpeed: 700,
+            lastShotTime: 0, speed: 220, baseSpeed: 220, pickupRadius: 100,
+            dashCooldown: 2000, lastDashTime: 0, isDashing: false, dashDuration: 150, dashSpeed: 750,
             shields: 1, // Start with 1 shield by default
             explosiveProjectiles: false,
             speedBoostTimer: 0, fireRateBoostTimer: 0, invincibilityTimer: 0,
@@ -456,6 +456,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isPaused) {
             lastTime = performance.now();
             requestAnimationFrame(gameLoop);
+        } else {
+            movementJoystickUI.classList.add('hidden');
+            attackJoystickUI.classList.add('hidden');
+            movementJoystickHandle.style.transform = 'translate(0, 0)';
+            attackJoystickHandle.style.transform = 'translate(0, 0)';
+            movementJoystickState.active = false;
+            movementJoystickState.touchId = null;
+            attackJoystickState.active = false;
+            attackJoystickState.touchId = null;
         }
     }
     
@@ -487,6 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleTouchStart(e) {
+        if (e.target.closest('button, .upgrade-card')) return;
         if (gameState !== 'playing' || isPaused) return;
         e.preventDefault();
         const rect = gameWrapper.getBoundingClientRect();
@@ -529,8 +539,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleTouchMove(e) {
-        if (gameState !== 'playing' || isPaused) return;
-        e.preventDefault();
+        let isJoystickMove = false;
+        for (const touch of e.changedTouches) {
+            if (touch.identifier === movementJoystickState.touchId || touch.identifier === attackJoystickState.touchId) {
+                isJoystickMove = true;
+                break;
+            }
+        }
+        
+        if (!isJoystickMove) {
+            return; // Not a joystick touch, let browser handle it.
+        }
+    
+        e.preventDefault(); // It's a joystick touch, prevent default actions.
+    
+        if (gameState !== 'playing' || isPaused) {
+            return; // Game is paused, don't update joystick visuals/state.
+        }
+
         for (const touch of e.changedTouches) {
             let state = null;
             let handle = null;
@@ -562,8 +588,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleTouchEnd(e) {
-        if (gameState !== 'playing' || isPaused) return;
-        e.preventDefault();
+        if (gameState !== 'playing' || isPaused) {
+            // If the game is paused while a touch is active, ensure the joystick is hidden.
+            // This is a fallback for the main logic in togglePause/handleLevelUp.
+            if (movementJoystickState.touchId !== null || attackJoystickState.touchId !== null) {
+                movementJoystickUI.classList.add('hidden');
+                attackJoystickUI.classList.add('hidden');
+            }
+            return;
+        };
+
         const now = e.timeStamp;
         for (const touch of e.changedTouches) {
             if (touch.identifier === movementJoystickState.touchId) {
@@ -1597,6 +1631,16 @@ document.addEventListener('DOMContentLoaded', () => {
         sounds.levelUp();
         
         isPaused = true;
+        
+        movementJoystickUI.classList.add('hidden');
+        attackJoystickUI.classList.add('hidden');
+        movementJoystickHandle.style.transform = 'translate(0, 0)';
+        attackJoystickHandle.style.transform = 'translate(0, 0)';
+        movementJoystickState.active = false;
+        movementJoystickState.touchId = null;
+        attackJoystickState.active = false;
+        attackJoystickState.touchId = null;
+
         levelUpScreen.classList.remove('hidden');
         levelUpOptionsContainer.innerHTML = '';
 
