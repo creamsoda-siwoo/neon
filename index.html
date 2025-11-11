@@ -129,8 +129,8 @@
     }
     .joystick {
         position: absolute;
-        width: 120px;
-        height: 120px;
+        width: 80px;
+        height: 80px;
         pointer-events: none;
     }
     .joystick-base {
@@ -145,10 +145,10 @@
     }
     .joystick-handle {
         position: absolute;
-        width: 60px;
-        height: 60px;
-        top: 30px;
-        left: 30px;
+        width: 40px;
+        height: 40px;
+        top: 20px;
+        left: 20px;
         border-radius: 50%;
         background-color: rgba(0, 255, 255, 0.3);
         border: 2px solid rgba(0, 255, 255, 0.8);
@@ -246,11 +246,10 @@
 
           <div class="w-full max-w-2xl mt-4">
               <h2 class="text-xl mb-2 text-glow">무기 선택</h2>
-              <div id="weapon-selection" class="grid grid-cols-3 gap-2 mb-2">
-                  <button class="button-retro selection-button" data-weapon="machine-gun">기관총</button>
+              <div id="weapon-selection" class="grid grid-cols-4 gap-2 mb-2">
+                  <button class="button-retro selection-button selected" data-weapon="machine-gun">기관총</button>
                   <button class="button-retro selection-button" data-weapon="missile">유도 미사일</button>
                   <button class="button-retro selection-button" data-weapon="bomb">폭탄</button>
-                  <button class="button-retro selection-button" data-weapon="shotgun">샷건</button>
                   <button class="button-retro selection-button" data-weapon="laser">레이저</button>
                   <button class="button-retro selection-button" data-weapon="bow">활</button>
                   <button class="button-retro selection-button" data-weapon="chain-lightning">연쇄 번개</button>
@@ -383,7 +382,6 @@ document.addEventListener('DOMContentLoaded', () => {
         'machine-gun': { fireRate: 400, damage: 12, projectileType: 'bullet', name: '기관총', knockback: 20, description: '가장 균형잡힌 무기. 8발마다 강력한 넉백탄 발사!' },
         'missile': { fireRate: 1000, damage: 40, projectileType: 'missile', name: '유도 미사일', explosionRadius: 70, description: '가장 가까운 적을 추적하며 넓은 범위에 폭발 피해를 줍니다.' },
         'bomb': { fireRate: 800, damage: 25, projectileType: 'bomb', name: '폭탄', shrapnelCount: 5, description: '포물선으로 날아가 폭발하며 5개의 파편을 흩뿌립니다.' },
-        'shotgun': { fireRate: 700, damage: 10, projectileType: 'pellet', name: '샷건', pellets: 5, spread: 0.5, knockback: 5, description: '근거리의 적들을 밀쳐내며 강력한 피해를 줍니다.' },
         'laser': { fireRate: 1200, damage: 45, projectileType: 'laser', name: '레이저', slowAmount: 0.5, slowDuration: 1000, description: '적을 관통하며 1초간 이동 속도를 50% 감소시킵니다.' },
         'bow': { fireRate: 600, damage: 25, projectileType: 'arrow', name: '활', critChance: 0.15, critMultiplier: 2, description: '적을 관통하며 15% 확률로 2배의 치명타 피해를 입힙니다.' },
         'chain-lightning': { fireRate: 800, damage: 30, projectileType: 'lightning', name: '연쇄 번개', bounces: 4, description: '적들 사이를 4번 튕기는 번개를 발사합니다.' },
@@ -450,9 +448,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeTouchCount = 0;
 
     // Joystick State
-    const JOYSTICK_BASE_RADIUS = 60;
-    const JOYSTICK_MAX_OFFSET = JOYSTICK_BASE_RADIUS - 30;
-    const JOYSTICK_DEAD_ZONE = 10;
+    const JOYSTICK_BASE_RADIUS = 40;
+    const JOYSTICK_MAX_OFFSET = JOYSTICK_BASE_RADIUS - 20;
+    const JOYSTICK_DEAD_ZONE = 5;
     let movementJoystickState = { active: false, x: 0, y: 0, dx: 0, dy: 0, touchId: null, startTime: 0, startX: 0, startY: 0 };
     let attackJoystickState = { active: false, x: 0, y: 0, dx: 0, dy: 0, touchId: null };
 
@@ -689,21 +687,6 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             
             switch (player.projectileType) {
-                case 'pellet':
-                    angle += (Math.random() - 0.5) * weapon.spread;
-                    projectile.vx = Math.cos(angle) * projectileSpeed;
-                    projectile.vy = Math.sin(angle) * projectileSpeed;
-                    projectile.lifetime = 300;
-                    projectile.knockback = weapon.knockback;
-                    for (let j = 0; j < weapon.pellets; j++) {
-                        let pelletAngle = angle + (Math.random() - 0.5) * weapon.spread;
-                        projectiles.push({
-                            ...projectile,
-                            vx: Math.cos(pelletAngle) * (projectileSpeed * (0.8 + Math.random() * 0.4)),
-                            vy: Math.sin(pelletAngle) * (projectileSpeed * (0.8 + Math.random() * 0.4)),
-                        });
-                    }
-                    return; // Skip the default push
                 case 'missile':
                     projectile.vx = Math.cos(angle) * 150;
                     projectile.vy = Math.sin(angle) * 150;
@@ -1659,9 +1642,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Touch Controls ---
     const isMobile = 'ontouchstart' in window;
     if (isMobile) {
-        movementJoystickUI.classList.remove('hidden');
-        attackJoystickUI.classList.remove('hidden');
-
         function getTouchPos(touch) {
             const rect = canvas.getBoundingClientRect();
             return {
@@ -1671,6 +1651,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function handleTouchStart(e) {
+            if (gameState !== 'playing') return;
             e.preventDefault();
             activeTouchCount = e.touches.length;
             for (const touch of e.changedTouches) {
@@ -1683,6 +1664,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         movementJoystickState.y = pos.y;
                         movementJoystickUI.style.left = `${pos.x - JOYSTICK_BASE_RADIUS}px`;
                         movementJoystickUI.style.top = `${pos.y - JOYSTICK_BASE_RADIUS}px`;
+                        movementJoystickUI.classList.remove('hidden');
                         movementJoystickUI.classList.add('active');
                     }
                 } else { // Right side for attack
@@ -1693,6 +1675,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         attackJoystickState.y = pos.y;
                         attackJoystickUI.style.left = `${pos.x - JOYSTICK_BASE_RADIUS}px`;
                         attackJoystickUI.style.top = `${pos.y - JOYSTICK_BASE_RADIUS}px`;
+                        attackJoystickUI.classList.remove('hidden');
                         attackJoystickUI.classList.add('active');
                     }
                 }
@@ -1700,6 +1683,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         function handleTouchMove(e) {
+            if (gameState !== 'playing') return;
             e.preventDefault();
             for (const touch of e.changedTouches) {
                 const pos = getTouchPos(touch);
@@ -1742,6 +1726,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function handleTouchEnd(e) {
+            if (gameState !== 'playing') return;
             e.preventDefault();
             activeTouchCount = e.touches.length;
             for (const touch of e.changedTouches) {
@@ -1752,6 +1737,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     movementJoystickState.dy = 0;
                     movementJoystickHandle.style.transform = 'translate(0,0)';
                     movementJoystickUI.classList.remove('active');
+                    movementJoystickUI.classList.add('hidden');
                 } else if (touch.identifier === attackJoystickState.touchId) {
                     attackJoystickState.active = false;
                     attackJoystickState.touchId = null;
@@ -1759,6 +1745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     attackJoystickState.dy = 0;
                     attackJoystickHandle.style.transform = 'translate(0,0)';
                     attackJoystickUI.classList.remove('active');
+                    attackJoystickUI.classList.add('hidden');
                 }
             }
         }
@@ -1771,6 +1758,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // --- Game Initialization ---
     selectedDifficulty = difficultySelection.querySelector('.selected').dataset.difficulty;
+    const defaultWeaponButton = weaponSelection.querySelector('.selected');
+    if (defaultWeaponButton) {
+        selectedWeapon = defaultWeaponButton.dataset.weapon;
+        startButton.disabled = false;
+    }
     updateHighscoreDisplay();
 
 });
