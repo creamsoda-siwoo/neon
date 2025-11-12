@@ -730,251 +730,258 @@ document.addEventListener('DOMContentLoaded', () => {
                     projectile.lifetime = 3000;
                     break;
                 case 'plasma-ball':
-                    projectile.vx = Math.cos(angle) * 120;
-                    projectile.vy = Math.sin(angle) * 120;
-                    projectile.lifetime = 4000;
+                    projectile.vx = Math.cos(angle) * 80;
+                    projectile.vy = Math.sin(angle) * 80;
                     projectile.explosionRadius = weapon.explosionRadius;
                     projectile.burnDamage = weapon.burnDamage;
                     projectile.burnDuration = weapon.burnDuration;
+                    projectile.lifetime = 4000;
                     break;
-                 case 'ricochet-blade':
-                    projectile.vx = Math.cos(angle) * 250;
-                    projectile.vy = Math.sin(angle) * 250;
-                    projectile.angularVelocity = 10;
-                    projectile.rotation = 0;
+                case 'ricochet-blade':
+                    projectile.vx = Math.cos(angle) * 350;
+                    projectile.vy = Math.sin(angle) * 350;
                     projectile.bouncesLeft = weapon.bounces;
                     projectile.bounceRange = 200;
-                    projectile.hitEnemies = new Set();
+                    projectile.rotation = 0;
+                    projectile.rotationSpeed = 15;
                     break;
                 case 'vortex-orb':
-                    projectile.vx = Math.cos(angle) * 150;
-                    projectile.vy = Math.sin(angle) * 150;
+                    projectile.vx = Math.cos(angle) * 120;
+                    projectile.vy = Math.sin(angle) * 120;
                     projectile.lifetime = 2500;
                     break;
                 case 'glitch-pulse':
-                    projectile.vx = Math.cos(angle) * 400;
-                    projectile.vy = Math.sin(angle) * 400;
-                    projectile.lifetime = 250;
+                    projectile.width = 100;
+                    projectile.height = 10;
+                    projectile.angle = angle;
                     projectile.pierce = true;
-                    projectile.width = 40;
                     projectile.stunChance = weapon.stunChance;
                     projectile.stunDuration = weapon.stunDuration;
+                    projectile.lifetime = 300;
                     break;
                 case 'cryo-shard':
-                    player.machineGunShotCount = (player.machineGunShotCount || 0) + 1;
                     projectile.vx = Math.cos(angle) * 400;
                     projectile.vy = Math.sin(angle) * 400;
                     projectile.slowAmount = weapon.slowAmount;
                     projectile.slowDuration = weapon.slowDuration;
+                    
+                    player.machineGunShotCount = (player.machineGunShotCount || 0) + 1;
                     if (player.machineGunShotCount % weapon.freezeOnNthShot === 0) {
                         projectile.shouldFreeze = true;
                         projectile.freezeDuration = weapon.freezeDuration;
                     }
                     break;
-                case 'bullet':
-                default:
+                 case 'bomb':
+                    const speed = 250;
+                    const travelTime = 600; // in ms
+                    projectile.vx = Math.cos(angle) * speed;
+                    projectile.vy = Math.sin(angle) * speed;
+                    projectile.vz = 200; // initial upward velocity
+                    projectile.gravity = -400; // gravity effect
+                    projectile.lifetime = travelTime;
+                    projectile.shrapnelCount = weapon.shrapnelCount;
+                    break;
+                default: // machine-gun (bullet)
+                    projectile.vx = Math.cos(angle) * 400;
+                    projectile.vy = Math.sin(angle) * 400;
                     player.machineGunShotCount = (player.machineGunShotCount || 0) + 1;
-                    let knockback = 0;
-                    if(player.machineGunShotCount % 8 === 0) {
-                        knockback = weapon.knockback;
+                    if (player.machineGunShotCount % 8 === 0) {
+                        projectile.knockback = weapon.knockback * 5;
+                        projectile.size = 10;
+                    } else {
+                        projectile.knockback = weapon.knockback;
+                        projectile.size = 5;
                     }
-                    projectile.knockback = knockback;
-                    projectile.vx = Math.cos(angle) * projectileSpeed;
-                    projectile.vy = Math.sin(angle) * projectileSpeed;
                     break;
             }
             projectiles.push(projectile);
         }
     }
-    
-    function createExplosion(x, y, radius, damage) {
-        explosions.push({ x, y, radius, maxRadius: radius, duration: 200, timer: 0, damage: damage });
-        sounds.explosion();
-        screenShake.duration = 100;
-        screenShake.magnitude = 5;
+
+    function findClosestEnemy() {
+        if (enemies.length === 0) return null;
+        let closest = null;
+        let closestDistSq = Infinity;
+        for (const enemy of enemies) {
+            const distSq = (enemy.x - player.x) ** 2 + (enemy.y - player.y) ** 2;
+            if (distSq < closestDistSq) {
+                closestDistSq = distSq;
+                closest = enemy;
+            }
+        }
+        return closest;
     }
-    
-    function resetCombo() {
-        comboCount = 0;
-        comboUI.textContent = '';
-    }
 
-    // --- Update Functions ---
-    
-    function updatePlayer(deltaTime) {
-        if (player.isDashing) return;
 
-        // Movement
-        let dx = 0;
-        let dy = 0;
-
+    function update(dt) {
+        // --- Player Movement ---
+        let moveX = 0, moveY = 0;
+        if (keysPressed['w'] || keysPressed['ArrowUp']) moveY = -1;
+        if (keysPressed['s'] || keysPressed['ArrowDown']) moveY = 1;
+        if (keysPressed['a'] || keysPressed['ArrowLeft']) moveX = -1;
+        if (keysPressed['d'] || keysPressed['ArrowRight']) moveX = 1;
+        
         if (movementJoystickState.active) {
-            dx = movementJoystickState.dx;
-            dy = movementJoystickState.dy;
-        } else {
-            if (keysPressed.w || keysPressed.ArrowUp) dy -= 1;
-            if (keysPressed.s || keysPressed.ArrowDown) dy += 1;
-            if (keysPressed.a || keysPressed.ArrowLeft) dx -= 1;
-            if (keysPressed.d || keysPressed.ArrowRight) dx += 1;
+            moveX = movementJoystickState.dx;
+            moveY = movementJoystickState.dy;
         }
 
-        const len = Math.hypot(dx, dy);
-        if (len > 0) {
-            dx /= len;
-            dy /= len;
-            player.x += dx * player.speed * deltaTime;
-            player.y += dy * player.speed * deltaTime;
+        const moveMagnitude = Math.hypot(moveX, moveY);
+        if (moveMagnitude > 0) {
+            const normalizedX = moveX / moveMagnitude;
+            const normalizedY = moveY / moveMagnitude;
+            player.x += normalizedX * player.speed * dt;
+            player.y += normalizedY * player.speed * dt;
         }
 
+        // Clamp player position
         player.x = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_WIDTH - PLAYER_SIZE / 2, player.x));
         player.y = Math.max(PLAYER_SIZE / 2, Math.min(CANVAS_HEIGHT - PLAYER_SIZE / 2, player.y));
-
-        // Auto-shooting
-        let closestEnemy = null;
-        let minDistance = Infinity;
-        enemies.forEach(enemy => {
-            const distance = Math.hypot(enemy.x - player.x, enemy.y - player.y);
-            if (distance < minDistance) {
-                minDistance = distance;
-                closestEnemy = enemy;
-            }
-        });
-
+        
+        // --- Automatic Shooting ---
+        const closestEnemy = findClosestEnemy();
         if (closestEnemy) {
             shoot(closestEnemy.x, closestEnemy.y);
         }
-        
-        // Boost Timers
-        if (player.speedBoostTimer > 0) {
-            player.speedBoostTimer -= deltaTime * 1000;
-            if(player.speedBoostTimer <= 0) player.speed = player.baseSpeed;
-        }
-        if (player.fireRateBoostTimer > 0) {
-            player.fireRateBoostTimer -= deltaTime * 1000;
-            if(player.fireRateBoostTimer <= 0) player.fireRate = player.baseFireRate;
-        }
-        if (player.invincibilityTimer > 0) {
-            player.invincibilityTimer -= deltaTime * 1000;
-        }
-        if (player.magnetTimer > 0) {
-            player.magnetTimer -= deltaTime * 1000;
+
+        // --- Timers ---
+        gameTime += dt;
+        timerUI.textContent = formatTime(gameTime);
+        if (gameTime > highScore) {
+            highScore = gameTime;
+            localStorage.setItem('neonSurvivorHighScore', highScore);
+            highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
         }
         
-        // Regeneration
+        const currentRank = getRank(gameTime);
+        currentRankUI.textContent = currentRank.name;
+        currentRankUI.style.color = currentRank.color;
+        currentRankUI.style.textShadow = `0 0 8px ${currentRank.color}`;
+
+        // Combo
+        if (comboCount > 0 && performance.now() - lastKillTime > COMBO_TIMEOUT) {
+            comboCount = 0;
+            comboUI.textContent = '';
+        }
+        
+        // --- Spawning ---
+        lastSpawnTime += dt * 1000;
+        if (lastSpawnTime > spawnInterval) {
+            lastSpawnTime = 0;
+            const spawnCount = 1 + Math.floor(gameTime / 20);
+            for(let i=0; i<spawnCount; i++) {
+                spawnEnemy();
+            }
+            spawnInterval = Math.max(200, 1500 * DIFFICULTY_SETTINGS[gameDifficulty].spawnRateMult - gameTime * 5);
+        }
+        if (gameTime > 300 && !bossSpawned) {
+             spawnBoss();
+        }
+
+        // --- Player Regeneration ---
         if (player.regeneration > 0) {
-            player.hp = Math.min(player.maxHp, player.hp + player.regeneration * deltaTime);
+            player.hp = Math.min(player.maxHp, player.hp + player.regeneration * dt);
         }
-    }
-    
-    function updateEnemies(deltaTime) {
-        enemies.forEach(enemy => {
-            if (enemy.freezeTimer > 0) {
-                enemy.freezeTimer -= deltaTime * 1000;
-                return;
-            }
-            if (enemy.stunTimer > 0) {
-                enemy.stunTimer -= deltaTime * 1000;
-                return;
-            }
 
-            let currentSpeed = enemy.speed;
-            if (enemy.slowTimer > 0) {
-                enemy.slowTimer -= deltaTime * 1000;
-                currentSpeed *= enemy.slowAmount;
-            }
-            if (enemy.burnTimer > 0) {
-                enemy.burnTimer -= deltaTime * 1000;
-                takeDamage(enemy, enemy.burnDamage * deltaTime);
-            }
+        // --- Update Entities ---
 
-            const dx = player.x - enemy.x;
-            const dy = player.y - enemy.y;
-            const dist = Math.hypot(dx, dy);
-            
-            if (dist > 1) {
-                enemy.x += (dx / dist) * currentSpeed * deltaTime;
-                enemy.y += (dy / dist) * currentSpeed * deltaTime;
-            }
-
-            if (dist < PLAYER_SIZE / 2 + enemy.size / 2) {
-                takeDamage(player, enemy.damage);
-                if (player.thornsDamage > 0) {
-                    takeDamage(enemy, player.thornsDamage);
-                }
-            }
-            
-            // Enemy actions
-            if (enemy.fireRate && performance.now() - enemy.lastActionTime > enemy.fireRate) {
-                enemy.lastActionTime = performance.now();
-                const angle = Math.atan2(player.y - enemy.y, player.x - enemy.x);
-                enemyProjectiles.push({
-                    x: enemy.x, y: enemy.y,
-                    vx: Math.cos(angle) * enemy.projectileSpeed,
-                    vy: Math.sin(angle) * enemy.projectileSpeed,
-                    size: 8, lifetime: 3000, damage: enemy.damage,
-                    owner: 'enemy'
-                });
-            }
-            if (enemy.action === 'summon' && performance.now() - enemy.lastActionTime > enemy.actionRate) {
-                enemy.lastActionTime = performance.now();
-                sounds.summon();
-                for (let i = 0; i < 2; i++) {
-                    const gruntBase = ENEMY_TYPES['grunt'];
-                    const finalHp = gruntBase.hp * DIFFICULTY_SETTINGS[gameDifficulty].enemyHpMult * (1 + gameTime / 120);
-                    enemies.push({ 
-                        ...gruntBase, 
-                        x: enemy.x + (Math.random() - 0.5) * 50, 
-                        y: enemy.y + (Math.random() - 0.5) * 50, 
-                        hp: finalHp, 
-                        maxHp: finalHp,
-                        speed: gruntBase.speed * DIFFICULTY_SETTINGS[gameDifficulty].enemySpeedMult,
-                        lastActionTime: 0
-                    });
-                }
-            }
-        });
-    }
-
-    function updateProjectiles(deltaTime) {
-        // Player projectiles
-        for (let i = projectiles.length - 1; i >= 0; i--) {
-            const p = projectiles[i];
-            p.x += p.vx * deltaTime;
-            p.y += p.vy * deltaTime;
-            p.lifetime -= deltaTime * 1000;
-
+        // Projectiles
+        projectiles.forEach((p, i) => {
             if (p.type === 'missile' && p.target && p.target.hp > 0) {
                 const angle = Math.atan2(p.target.y - p.y, p.target.x - p.x);
-                p.vx += Math.cos(angle) * 300 * deltaTime;
-                p.vy += Math.sin(angle) * 300 * deltaTime;
+                p.vx += Math.cos(angle) * 500 * dt;
+                p.vy += Math.sin(angle) * 500 * dt;
                 const speed = Math.hypot(p.vx, p.vy);
-                if (speed > 250) {
-                    p.vx = (p.vx / speed) * 250;
-                    p.vy = (p.vy / speed) * 250;
+                const maxSpeed = 300;
+                if (speed > maxSpeed) {
+                    p.vx = (p.vx / speed) * maxSpeed;
+                    p.vy = (p.vy / speed) * maxSpeed;
                 }
-            }
-            if (p.type === 'ricochet-blade') {
-                p.rotation += p.angularVelocity * deltaTime;
-            }
-
-            if (p.x < 0 || p.x > CANVAS_WIDTH || p.y < 0 || p.y > CANVAS_HEIGHT || p.lifetime <= 0) {
-                if (p.type === 'missile' || p.type === 'plasma-ball' || p.explosive) {
-                    createExplosion(p.x, p.y, p.explosionRadius, p.damage);
-                } else if (p.type === 'black-hole-orb' || p.type === 'vortex-orb') {
-                    // Logic for creating black holes/vortexes can be added here
-                }
-                projectiles.splice(i, 1);
-                continue;
+            } else if (p.type === 'bomb') {
+                p.vz += p.gravity * dt;
+                p.y -= p.vz * dt;
             }
             
-            let hit = false;
-            for (let j = enemies.length - 1; j >= 0; j--) {
-                const e = enemies[j];
-                const dist = Math.hypot(p.x - e.x, p.y - e.y);
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            
+            p.lifetime -= dt * 1000;
+            if (p.lifetime <= 0) {
+                if (p.type === 'bomb' || p.type === 'black-hole-orb' || p.type === 'plasma-ball' || p.type === 'vortex-orb') {
+                    // Special on-expire effects
+                     if (p.type === 'black-hole-orb') {
+                        blackHoles.push({ x: p.x, y: p.y, radius: 10, maxRadius: 100, duration: 5000, pullForce: 250, damage: 15, damageInterval: 500, lastDamageTime: 0 });
+                        sounds.blackHole();
+                    } else if (p.type === 'bomb') {
+                         explosions.push({ x: p.x, y: p.y, radius: 0, maxRadius: 40, damage: p.damage });
+                        // shrapnel
+                        for (let i = 0; i < p.shrapnelCount; i++) {
+                            const angle = Math.random() * Math.PI * 2;
+                            projectiles.push({
+                                x: p.x, y: p.y, type: 'bullet', damage: p.damage / 2,
+                                vx: Math.cos(angle) * 200, vy: Math.sin(angle) * 200,
+                                lifetime: 500, owner: 'player', knockback: 10
+                            });
+                        }
+                    } else if (p.type === 'plasma-ball') {
+                        explosions.push({ x: p.x, y: p.y, radius: 0, maxRadius: p.explosionRadius, damage: p.damage, burnDamage: p.burnDamage, burnDuration: p.burnDuration });
+                    }
+                }
+                projectiles.splice(i, 1);
+            }
+        });
 
-                if (dist < e.size / 2 + 5) { // 5 is projectile radius
-                    hit = true;
-                    
+        // Enemies
+        enemies.forEach((e, i) => {
+            // Effects
+            if (e.freezeTimer > 0) {
+                e.freezeTimer -= dt * 1000;
+            } else if (e.slowTimer > 0) {
+                e.slowTimer -= dt * 1000;
+            }
+            if (e.burnTimer > 0) {
+                e.burnTimer -= dt * 1000;
+                if (Math.floor(e.burnTimer / 500) !== Math.floor((e.burnTimer + dt * 1000) / 500)) {
+                    takeDamage(e, e.burnDamage);
+                }
+            }
+
+            const speed = e.speed * (e.freezeTimer > 0 ? 0 : (e.slowTimer > 0 ? (1 - e.slowAmount) : 1));
+            const angle = Math.atan2(player.y - e.y, player.x - e.x);
+            e.x += Math.cos(angle) * speed * dt;
+            e.y += Math.sin(angle) * speed * dt;
+
+            // Collision with player
+            if (Math.hypot(e.x - player.x, e.y - player.y) < PLAYER_SIZE / 2 + e.size / 2) {
+                takeDamage(player, e.damage);
+                if (player.thornsDamage > 0) {
+                    takeDamage(e, player.thornsDamage);
+                }
+            }
+            
+            // Enemy actions (shooting, summoning)
+            if (e.lastActionTime + (e.fireRate || e.actionRate) < performance.now()) {
+                e.lastActionTime = performance.now();
+                if (e.shape === 'triangle' && e.action !== 'summon') { // Shooter
+                    const angleToPlayer = Math.atan2(player.y - e.y, player.x - e.x);
+                    enemyProjectiles.push({
+                        x: e.x, y: e.y, type: 'bullet', damage: e.damage,
+                        vx: Math.cos(angleToPlayer) * e.projectileSpeed,
+                        vy: Math.sin(angleToPlayer) * e.projectileSpeed,
+                        lifetime: 3000, owner: 'enemy'
+                    });
+                } else if (e.action === 'summon') {
+                    sounds.summon();
+                    for(let i = 0; i < 2; i++) {
+                        const grunt = ENEMY_TYPES['grunt'];
+                        enemies.push({ ...grunt, x: e.x + (Math.random() - 0.5) * 40, y: e.y + (Math.random() - 0.5) * 40, hp: grunt.hp * 0.5, speed: grunt.speed * 1.1 });
+                    }
+                }
+            }
+
+            // Projectile collision with enemy
+            projectiles.forEach((p, j) => {
+                 if (Math.hypot(p.x - e.x, p.y - e.y) < e.size / 2 + 5) {
                     let damage = p.damage;
                     let isCrit = false;
                     if (p.critChance && Math.random() < p.critChance) {
@@ -983,366 +990,149 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
 
                     takeDamage(e, damage, isCrit);
-
+                    
                     if (p.knockback) {
                         const angle = Math.atan2(e.y - p.y, e.x - p.x);
                         e.x += Math.cos(angle) * p.knockback;
                         e.y += Math.sin(angle) * p.knockback;
                     }
+
                     if (p.slowAmount) {
                         e.slowTimer = p.slowDuration;
-                        e.slowAmount = 1 - p.slowAmount;
+                        e.slowAmount = p.slowAmount;
                     }
-                     if (p.shouldFreeze) {
-                        e.freezeTimer = p.freezeDuration;
-                        sounds.freeze();
+                    if (p.shouldFreeze) {
+                         e.freezeTimer = p.freezeDuration;
+                         sounds.freeze();
                     }
-                    if (p.stunChance && Math.random() < p.stunChance) {
-                        e.stunTimer = p.stunDuration;
-                    }
-
-                    if (e.hp <= 0) {
-                        // Enemy death
-                        xpGems.push({ x: e.x, y: e.y, value: e.xp });
-                        if (Math.random() < HEALTH_PACK_DROP_CHANCE) {
-                           healthPacks.push({
-                               x: e.x, y: e.y, size: 15,
-                               healAmount: player.maxHp * 0.20
-                           });
-                        }
-                        if (player.chainReactionChance > 0 && Math.random() < player.chainReactionChance) {
-                            createExplosion(e.x, e.y, 60, 25);
-                        }
-                        if (e.onDeath === 'explode') {
-                            createExplosion(e.x, e.y, 80, e.damage);
-                        }
-                        enemies.splice(j, 1);
-                        comboCount++;
-                        lastKillTime = performance.now();
-                    }
-
-                    if (p.type === 'missile' || p.type === 'plasma-ball' || p.explosive) {
-                         createExplosion(p.x, p.y, p.explosionRadius, p.damage);
+                     
+                    if (p.explosive) {
+                        explosions.push({ x: p.x, y: p.y, radius: 0, maxRadius: p.explosionRadius, damage: p.damage / 2 });
                     }
                     
                     if (!p.pierce) {
-                        projectiles.splice(i, 1);
-                        break;
+                        if (p.type === 'ricochet-blade' && p.bouncesLeft > 0) {
+                            let nextTarget = null;
+                            let minDistance = Infinity;
+                            enemies.forEach(otherEnemy => {
+                                if (otherEnemy !== e && !p.hitEnemies?.includes(otherEnemy.id)) {
+                                    const dist = Math.hypot(e.x - otherEnemy.x, e.y - otherEnemy.y);
+                                    if (dist < p.bounceRange && dist < minDistance) {
+                                        minDistance = dist;
+                                        nextTarget = otherEnemy;
+                                    }
+                                }
+                            });
+                            if (nextTarget) {
+                                p.bouncesLeft--;
+                                p.hitEnemies = p.hitEnemies || [];
+                                p.hitEnemies.push(e.id);
+                                const angleToNext = Math.atan2(nextTarget.y - e.y, nextTarget.x - e.x);
+                                const speed = Math.hypot(p.vx, p.vy);
+                                p.vx = Math.cos(angleToNext) * speed;
+                                p.vy = Math.sin(angleToNext) * speed;
+                            } else {
+                                projectiles.splice(j, 1);
+                            }
+                        } else {
+                            projectiles.splice(j, 1);
+                        }
                     }
                 }
+            });
+            
+            if (e.hp <= 0) { // Enemy died
+                enemies.splice(i, 1);
+                xpGems.push({ x: e.x, y: e.y, value: e.xp, collected: false });
+                comboCount++;
+                lastKillTime = performance.now();
+                comboUI.textContent = `${comboCount} COMBO!`;
+
+                if(e.onDeath === 'explode') {
+                    explosions.push({ x: e.x, y: e.y, radius: 0, maxRadius: 60, damage: e.damage });
+                }
+                
+                if (player.chainReactionChance > 0 && Math.random() < player.chainReactionChance) {
+                    explosions.push({ x: e.x, y: e.y, radius: 0, maxRadius: 80, damage: 30 });
+                }
+
+                if (Math.random() < HEALTH_PACK_DROP_CHANCE) {
+                    healthPacks.push({ x: e.x, y: e.y, value: player.maxHp * 0.2, lifetime: 8000 });
+                }
             }
-        }
-
-        // Enemy projectiles
-        for (let i = enemyProjectiles.length - 1; i >= 0; i--) {
-            const p = enemyProjectiles[i];
-            p.x += p.vx * deltaTime;
-            p.y += p.vy * deltaTime;
-            p.lifetime -= deltaTime * 1000;
-
-            if (p.x < 0 || p.x > CANVAS_WIDTH || p.y < 0 || p.y > CANVAS_HEIGHT || p.lifetime <= 0) {
+        });
+        
+        // Enemy Projectiles
+        enemyProjectiles.forEach((p, i) => {
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            p.lifetime -= dt * 1000;
+            if (p.lifetime <= 0 || p.x < 0 || p.x > CANVAS_WIDTH || p.y < 0 || p.y > CANVAS_HEIGHT) {
                 enemyProjectiles.splice(i, 1);
-                continue;
             }
-
-            const dist = Math.hypot(p.x - player.x, p.y - player.y);
-            if (dist < PLAYER_SIZE / 2 + p.size / 2) {
+            if (Math.hypot(p.x - player.x, p.y - player.y) < PLAYER_SIZE / 2) {
                 takeDamage(player, p.damage);
                 enemyProjectiles.splice(i, 1);
             }
-        }
-    }
-    
-    function updateXpGems(deltaTime) {
-        for (let i = xpGems.length - 1; i >= 0; i--) {
-            const gem = xpGems[i];
-            const dist = Math.hypot(player.x - gem.x, player.y - gem.y);
-            const currentPickupRadius = player.pickupRadius * (player.magnetTimer > 0 ? 2 : 1);
+        });
 
-            if (dist < currentPickupRadius) {
+        // XP Gems
+        xpGems.forEach((gem, i) => {
+            const dist = Math.hypot(gem.x - player.x, gem.y - player.y);
+            if (dist < player.pickupRadius) {
+                gem.collected = true;
+            }
+            if (gem.collected) {
                 const angle = Math.atan2(player.y - gem.y, player.x - gem.x);
-                gem.x += Math.cos(angle) * 300 * deltaTime;
-                gem.y += Math.sin(angle) * 300 * deltaTime;
-
-                if (dist < PLAYER_SIZE / 2) {
+                gem.x += Math.cos(angle) * 400 * dt;
+                gem.y += Math.sin(angle) * 400 * dt;
+                if (dist < 10) {
                     collectXP(gem.value);
                     xpGems.splice(i, 1);
                 }
             }
-        }
-    }
-    
-    function updateHealthPacks(deltaTime) {
-        for (let i = healthPacks.length - 1; i >= 0; i--) {
-            const pack = healthPacks[i];
-            const dist = Math.hypot(player.x - pack.x, player.y - pack.y);
-            if (dist < PLAYER_SIZE / 2 + pack.size / 2) {
-                player.hp = Math.min(player.maxHp, player.hp + pack.healAmount);
+        });
+
+        // Health Packs
+        healthPacks.forEach((pack, i) => {
+            pack.lifetime -= dt * 1000;
+            if (pack.lifetime <= 0) {
+                healthPacks.splice(i, 1);
+                return;
+            }
+            const dist = Math.hypot(pack.x - player.x, pack.y - player.y);
+            if (dist < player.pickupRadius / 2) {
+                player.hp = Math.min(player.maxHp, player.hp + pack.value);
                 sounds.heal();
                 healthPacks.splice(i, 1);
             }
-        }
-    }
-
-    function updateExplosions(deltaTime) {
-        for (let i = explosions.length - 1; i >= 0; i--) {
-            const exp = explosions[i];
-            exp.timer += deltaTime * 1000;
-            if (exp.timer >= exp.duration) {
+        });
+        
+        // Explosions
+        explosions.forEach((exp, i) => {
+            exp.radius += 300 * dt;
+            if (exp.radius >= exp.maxRadius) {
                 explosions.splice(i, 1);
-                // Damage enemies at the end of explosion
-                enemies.forEach(e => {
-                    if (Math.hypot(exp.x - e.x, exp.y - e.y) < exp.maxRadius) {
-                        takeDamage(e, exp.damage);
-                    }
-                });
+                if (exp.damage > 0 && !exp.hasDamaged) {
+                    enemies.forEach(e => {
+                        if (Math.hypot(e.x - exp.x, e.y - exp.y) < exp.maxRadius) {
+                            takeDamage(e, exp.damage);
+                            if (exp.burnDamage > 0) {
+                                e.burnTimer = exp.burnDuration;
+                                e.burnDamage = exp.burnDamage;
+                            }
+                        }
+                    });
+                    exp.hasDamaged = true; // Damage only once
+                }
             }
-        }
-    }
-
-    function updateDamageTexts(deltaTime) {
-        for (let i = damageTexts.length - 1; i >= 0; i--) {
-            const dt = damageTexts[i];
-            dt.timer += deltaTime * 1000;
-            dt.y -= 30 * deltaTime;
-            dt.alpha -= 1.5 * deltaTime;
-            if (dt.timer >= 500) {
-                damageTexts.splice(i, 1);
-            }
-        }
-    }
-    
-    // --- Draw Functions ---
-
-    function drawPlayer() {
-        ctx.save();
-        ctx.translate(player.x, player.y);
-        
-        if (player.invincibilityTimer > 0 && Math.floor(player.invincibilityTimer / 100) % 2 === 0) {
-            ctx.globalAlpha = 0.5;
-        }
-
-        // Body
-        ctx.fillStyle = '#00ffff';
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 15;
-        ctx.beginPath();
-        ctx.rect(-PLAYER_SIZE / 2, -PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
-        ctx.fill();
-
-        // Shields
-        if (player.shields > 0) {
-            const orbitRadius = 40;
-            const shieldSize = 8;
-            for (let i = 0; i < player.shields; i++) {
-                const angle = (gameTime * 1.5) + (i * (2 * Math.PI / player.shields));
-                const sx = Math.cos(angle) * orbitRadius;
-                const sy = Math.sin(angle) * orbitRadius;
-                ctx.fillStyle = '#f0f';
-                ctx.shadowColor = '#f0f';
-                ctx.shadowBlur = 10;
-                ctx.beginPath();
-                ctx.rect(sx - shieldSize / 2, sy - shieldSize / 2, shieldSize, shieldSize);
-                ctx.fill();
-            }
-        }
-        
-        ctx.restore();
-    }
-    
-    function drawEnemies() {
-        enemies.forEach(e => {
-            ctx.save();
-            ctx.translate(e.x, e.y);
-            
-            if(e.freezeTimer > 0) {
-                ctx.fillStyle = '#67e8f9';
-                ctx.shadowColor = '#06b6d4';
-            } else if (e.burnTimer > 0) {
-                ctx.fillStyle = '#fb923c';
-                ctx.shadowColor = '#f97316';
-            } else {
-                ctx.fillStyle = e.color;
-                ctx.shadowColor = e.color;
-            }
-
-            ctx.shadowBlur = 10;
-
-            if (e.shape === 'triangle') {
-                ctx.beginPath();
-                ctx.moveTo(0, -e.size / 2);
-                ctx.lineTo(-e.size / 2, e.size / 2);
-                ctx.lineTo(e.size / 2, e.size / 2);
-                ctx.closePath();
-                ctx.fill();
-            } else { // square
-                ctx.fillRect(-e.size / 2, -e.size / 2, e.size, e.size);
-            }
-            
-            // Health bar
-            if (e.hp < e.maxHp) {
-                ctx.fillStyle = '#555';
-                ctx.fillRect(-e.size / 2, e.size / 2 + 5, e.size, 5);
-                ctx.fillStyle = '#f00';
-                ctx.fillRect(-e.size / 2, e.size / 2 + 5, e.size * (e.hp / e.maxHp), 5);
-            }
-            
-            ctx.restore();
         });
-    }
-    
-    function drawProjectiles() {
-        // Player projectiles
-        projectiles.forEach(p => {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.fillStyle = '#fff';
-            ctx.shadowColor = '#fff';
-            ctx.shadowBlur = 10;
-            
-            switch(p.type) {
-                case 'laser':
-                case 'arrow':
-                    ctx.fillStyle = '#f0f'; ctx.shadowColor = '#f0f';
-                    ctx.fillRect(-15, -2, 30, 4);
-                    break;
-                case 'missile':
-                    ctx.fillStyle = '#ff9900'; ctx.shadowColor = '#ff9900';
-                    ctx.beginPath(); ctx.arc(0, 0, 6, 0, 2 * Math.PI); ctx.fill();
-                    break;
-                case 'ricochet-blade':
-                    ctx.rotate(p.rotation);
-                    ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 2;
-                    ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 1.5); ctx.stroke();
-                    break;
-                default:
-                    ctx.beginPath(); ctx.arc(0, 0, 4, 0, 2 * Math.PI); ctx.fill();
-            }
-            
-            ctx.restore();
-        });
-        // Enemy projectiles
-        enemyProjectiles.forEach(p => {
-            ctx.save();
-            ctx.fillStyle = '#ff5555';
-            ctx.shadowColor = '#ff5555';
-            ctx.shadowBlur = 8;
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, p.size / 2, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.restore();
-        });
-    }
-    
-    function drawXpGems() {
-        xpGems.forEach(gem => {
-            ctx.save();
-            ctx.fillStyle = '#00ffff';
-            ctx.shadowColor = '#00ffff';
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
-            ctx.moveTo(gem.x, gem.y - 5);
-            ctx.lineTo(gem.x - 5, gem.y);
-            ctx.lineTo(gem.x, gem.y + 5);
-            ctx.lineTo(gem.x + 5, gem.y);
-            ctx.closePath();
-            ctx.fill();
-            ctx.restore();
-        });
-    }
 
-    function drawHealthPacks() {
-        healthPacks.forEach(pack => {
-            ctx.save();
-            ctx.translate(pack.x, pack.y);
-            ctx.shadowColor = '#4ade80';
-            ctx.shadowBlur = 15;
-            ctx.fillStyle = '#166534';
-            ctx.fillRect(-pack.size / 2, -pack.size / 2, pack.size, pack.size);
-            ctx.fillStyle = '#86efac';
-            ctx.fillRect(-pack.size * 0.4, -pack.size * 0.15, pack.size * 0.8, pack.size * 0.3);
-            ctx.fillRect(-pack.size * 0.15, -pack.size * 0.4, pack.size * 0.3, pack.size * 0.8);
-            ctx.restore();
-        });
-    }
-
-    function drawExplosions() {
-        explosions.forEach(exp => {
-            const progress = exp.timer / exp.duration;
-            const currentRadius = exp.maxRadius * progress;
-            ctx.save();
-            ctx.globalAlpha = 1 - progress;
-            ctx.beginPath();
-            ctx.arc(exp.x, exp.y, currentRadius, 0, 2 * Math.PI);
-            ctx.fillStyle = `rgba(255, 255, 150, ${1 - progress})`;
-            ctx.shadowColor = 'white';
-            ctx.shadowBlur = 20;
-            ctx.fill();
-            ctx.restore();
-        });
-    }
-    
-    function drawDamageTexts() {
-        damageTexts.forEach(dt => {
-            ctx.save();
-            ctx.fillStyle = `rgba(${dt.color}, ${dt.alpha})`;
-            ctx.font = dt.color === '255, 255, 0' ? 'bold 18px Orbitron' : '16px Orbitron';
-            ctx.textAlign = 'center';
-            ctx.fillText(dt.text, dt.x, dt.y);
-            ctx.restore();
-        });
-    }
-
-    function drawUI() {
+        // Update UI
         hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
         xpBar.style.width = `${(player.xp / player.xpToNextLevel) * 100}%`;
-        timerUI.textContent = formatTime(gameTime);
-        comboUI.textContent = comboCount > 1 ? `x${comboCount} COMBO` : '';
-        
-        const rank = getRank(gameTime);
-        currentRankUI.textContent = rank.name;
-        currentRankUI.style.color = rank.color;
-        currentRankUI.style.textShadow = `0 0 8px ${rank.color}`;
-    }
-    
-    // --- Game Loop ---
-    
-    function gameLoop(timestamp) {
-        if (isPaused || gameState !== 'playing') return;
-        
-        const deltaTime = (timestamp - lastTime) / 1000;
-        lastTime = timestamp;
-        gameTime += deltaTime;
 
-        update(deltaTime);
-        draw();
-
-        animationFrameId = requestAnimationFrame(gameLoop);
-    }
-    
-    function update(deltaTime) {
-        updatePlayer(deltaTime);
-        updateEnemies(deltaTime);
-        updateProjectiles(deltaTime);
-        updateXpGems(deltaTime);
-        updateHealthPacks(deltaTime);
-        updateExplosions(deltaTime);
-        updateDamageTexts(deltaTime);
-        
-        if (performance.now() - lastKillTime > COMBO_TIMEOUT) {
-            resetCombo();
-        }
-        
-        lastSpawnTime += deltaTime * 1000;
-        if (lastSpawnTime > spawnInterval) {
-            lastSpawnTime = 0;
-            const waveSize = 1 + Math.floor(gameTime / 10);
-            for (let i = 0; i < waveSize; i++) {
-                spawnEnemy();
-            }
-            spawnInterval = Math.max(200, spawnInterval * 0.99);
-        }
-
+        // Check for Game Over
         if (player.hp <= 0) {
             gameOver();
         }
@@ -1351,237 +1141,359 @@ document.addEventListener('DOMContentLoaded', () => {
     function draw() {
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         
-        const shakeX = (Math.random() - 0.5) * screenShake.magnitude * (screenShake.duration > 0 ? 1 : 0);
-        const shakeY = (Math.random() - 0.5) * screenShake.magnitude * (screenShake.duration > 0 ? 1 : 0);
+        const shakeX = (Math.random() - 0.5) * screenShake.magnitude;
+        const shakeY = (Math.random() - 0.5) * screenShake.magnitude;
         ctx.save();
         ctx.translate(shakeX, shakeY);
         
-        if(screenShake.duration > 0) screenShake.duration -= 16;
-        else screenShake.magnitude = 0;
+        // Draw health packs
+        healthPacks.forEach(pack => {
+            ctx.save();
+            ctx.translate(pack.x, pack.y);
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
+            ctx.shadowColor = '#0f0';
+            ctx.shadowBlur = 10;
+            ctx.fillRect(-8, -2, 16, 4);
+            ctx.fillRect(-2, -8, 4, 16);
+            ctx.restore();
+        });
 
-        drawXpGems();
-        drawHealthPacks();
-        drawProjectiles();
-        drawEnemies();
-        drawPlayer();
-        drawExplosions();
-        drawDamageTexts();
-        
-        ctx.restore();
-        drawUI();
-    }
-    
-    // --- Game State Management ---
+        // Draw XP Gems
+        xpGems.forEach(gem => {
+            ctx.fillStyle = '#00ffff';
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            ctx.arc(gem.x, gem.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+        });
 
-    function startGame() {
-        const difficulty = selectedDifficulty;
-        const weapon = selectedWeapon;
+        // Draw Player
+        ctx.fillStyle = '#00ffff';
+        ctx.shadowColor = '#00ffff';
+        ctx.shadowBlur = 15;
+        ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
 
-        if (!difficulty || !weapon) {
-             console.error("Attempted to start game with invalid selections.");
-             return;
+        // Draw Player Shields
+        for (let i = 0; i < player.shields; i++) {
+            const angle = (performance.now() / 500) + (i * (Math.PI * 2 / player.shields));
+            const x = player.x + Math.cos(angle) * 40;
+            const y = player.y + Math.sin(angle) * 40;
+            ctx.fillStyle = '#ff00ff';
+            ctx.shadowColor = '#ff00ff';
+            ctx.beginPath();
+            ctx.arc(x, y, 8, 0, Math.PI * 2);
+            ctx.fill();
         }
 
-        gameDifficulty = difficulty;
-        player = createInitialPlayer(difficulty, weapon);
-        enemies = [];
-        projectiles = [];
-        enemyProjectiles = [];
-        xpGems = [];
-        healthPacks = [];
-        explosions = [];
-        damageTexts = [];
-        
-        gameTime = 0;
-        lastSpawnTime = 0;
-        spawnInterval = 1500 * DIFFICULTY_SETTINGS[gameDifficulty].spawnRateMult;
-        bossSpawned = false;
-        resetCombo();
-        
-        startScreen.classList.add('hidden');
-        gameOverScreen.classList.add('hidden');
-        pauseButton.classList.remove('hidden');
+        // Draw Enemies
+        enemies.forEach(e => {
+            ctx.fillStyle = e.color;
+            ctx.shadowColor = e.color;
+            ctx.shadowBlur = 10;
+            ctx.beginPath();
+            if (e.shape === 'square') {
+                ctx.fillRect(e.x - e.size / 2, e.y - e.size / 2, e.size, e.size);
+            } else if (e.shape === 'triangle') {
+                const angle = Math.atan2(player.y - e.y, player.x - e.x);
+                ctx.moveTo(e.x + Math.cos(angle) * e.size, e.y + Math.sin(angle) * e.size);
+                ctx.lineTo(e.x + Math.cos(angle + 2.2) * e.size / 2, e.y + Math.sin(angle + 2.2) * e.size / 2);
+                ctx.lineTo(e.x + Math.cos(angle - 2.2) * e.size / 2, e.y + Math.sin(angle - 2.2) * e.size / 2);
+                ctx.closePath();
+                ctx.fill();
+            }
+            if (e.freezeTimer > 0) {
+                 ctx.strokeStyle = '#00f6ff';
+                 ctx.lineWidth = 3;
+                 ctx.strokeRect(e.x - e.size / 2 - 2, e.y - e.size / 2 - 2, e.size + 4, e.size + 4);
+            }
+        });
 
-        gameState = 'playing';
-        isPaused = false;
-        lastTime = performance.now();
+        // Draw Projectiles
+        ctx.shadowBlur = 10;
+        projectiles.forEach(p => {
+             if (p.type === 'bullet') {
+                ctx.fillStyle = '#ffff00';
+                ctx.shadowColor = '#ffff00';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size || 5, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (p.type === 'laser') {
+                 ctx.strokeStyle = '#ff00ff';
+                 ctx.shadowColor = '#ff00ff';
+                 ctx.lineWidth = 4;
+                 ctx.beginPath();
+                 const angle = Math.atan2(p.vy, p.vx);
+                 ctx.moveTo(p.x - Math.cos(angle) * 20, p.y - Math.sin(angle) * 20);
+                 ctx.lineTo(p.x, p.y);
+                 ctx.stroke();
+            } else { // Generic circle for other types
+                ctx.fillStyle = '#ff9900';
+                ctx.shadowColor = '#ff9900';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+        
+        enemyProjectiles.forEach(p => {
+            ctx.fillStyle = '#ff0000';
+            ctx.shadowColor = '#ff0000';
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+            ctx.fill();
+        });
+        
+        // Draw Explosions
+        explosions.forEach(exp => {
+            ctx.fillStyle = `rgba(255, 255, 0, ${1 - (exp.radius / exp.maxRadius)})`;
+            ctx.beginPath();
+            ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
+            ctx.fill();
+        });
+
+        // Draw Damage Text
+        damageTexts.forEach((dt, i) => {
+            ctx.fillStyle = `rgba(${dt.color}, ${dt.alpha})`;
+            ctx.font = dt.isCrit ? "bold 20px Orbitron" : "16px Orbitron";
+            ctx.textAlign = 'center';
+            ctx.fillText(dt.text, dt.x, dt.y - dt.timer * 30);
+            dt.timer += 1/60;
+            dt.alpha -= 1/60;
+            if (dt.alpha <= 0) {
+                damageTexts.splice(i, 1);
+            }
+        });
+        
+        ctx.restore();
+    }
+
+
+    function gameLoop(timestamp) {
+        if (isPaused || gameState !== 'playing') return;
+
+        if (!lastTime) lastTime = timestamp;
+        const dt = (timestamp - lastTime) / 1000;
+        lastTime = timestamp;
+        
+        if (screenShake.duration > 0) {
+            screenShake.duration -= dt * 1000;
+        } else {
+            screenShake.magnitude = 0;
+        }
+
+        update(dt);
+        draw();
+        
         animationFrameId = requestAnimationFrame(gameLoop);
     }
 
     function gameOver() {
         gameState = 'gameover';
         cancelAnimationFrame(animationFrameId);
-        
-        if (gameTime > highScore) {
-            highScore = gameTime;
-            localStorage.setItem('neonSurvivorHighScore', highScore);
-            updateHighscoreUI();
-        }
+        screenShake = { duration: 0, magnitude: 0 };
         
         gameOverTimeUI.textContent = `생존 시간: ${formatTime(gameTime)}`;
-        gameOverRankUI.textContent = `달성 랭크: ${getRank(gameTime).name}`;
+        gameOverRankUI.textContent = `최종 랭크: ${getRank(gameTime).name}`;
         gameOverHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
         gameOverScreen.classList.remove('hidden');
         pauseButton.classList.add('hidden');
     }
-    
+
     function resetGame() {
-        startScreen.classList.remove('hidden');
-        gameOverScreen.classList.add('hidden');
+        cancelAnimationFrame(animationFrameId);
+
+        gameState = 'start';
+        isPaused = false;
+        
+        // Reset game state variables
+        enemies = []; projectiles = []; enemyProjectiles = []; xpGems = []; healthPacks = []; nukes = []; explosions = [];
+        damageTexts = [];
+        screenShake = { duration: 0, magnitude: 0 };
+        gameTime = 0; lastTime = null;
+        lastSpawnTime = 0; spawnInterval = 1500;
+        bossSpawned = false;
+        keysPressed = {};
+        comboCount = 0; lastKillTime = 0;
+        
+        // Hide game screens, show start screen
         pauseScreen.classList.add('hidden');
         levelUpScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        startScreen.classList.remove('hidden');
         pauseButton.classList.add('hidden');
-        gameState = 'start';
+        
+        // Reset UI
+        levelUI.textContent = '레벨: 1';
+        timerUI.textContent = '00:00';
+        comboUI.textContent = '';
+        currentRankUI.textContent = '';
+        hpBar.style.width = '100%';
+        xpBar.style.width = '0%';
+        
+        // Reset selections on start screen UI
+        document.querySelectorAll('#difficulty-selection .selection-button').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.difficulty === '보통');
+        });
+        document.querySelectorAll('#weapon-selection .selection-button').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.weapon === 'machine-gun');
+        });
+        selectedDifficulty = '보통';
+        selectedWeapon = 'machine-gun';
+        updateStartButtonState();
+        
+        highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
+        startScreenHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
     }
+    
+    function startGame() {
+        if (!selectedDifficulty || !selectedWeapon) return;
 
-    function updateHighscoreUI() {
-        const formattedTime = formatTime(highScore);
-        highscoreUI.textContent = `최고기록: ${formattedTime}`;
-        startScreenHighscoreUI.textContent = `최고 기록: ${formattedTime}`;
+        gameDifficulty = selectedDifficulty;
+
+        player = createInitialPlayer(selectedDifficulty, selectedWeapon);
+        
+        gameState = 'playing';
+        isPaused = false;
+        gameTime = 0;
+        lastSpawnTime = 0;
+        spawnInterval = 1500 * DIFFICULTY_SETTINGS[gameDifficulty].spawnRateMult;
+        
+        enemies = []; projectiles = []; enemyProjectiles = []; xpGems = []; healthPacks = []; nukes = []; explosions = [];
+        orbitalShields = []; speedBoosts = []; fireRateBoosts = []; freezeBombs = []; invincibilityShields = []; blackHoleItems = [];
+        drones = []; explosiveBarrels = []; blackHoles = []; vortexes = [];
+        holographicDecoys = []; decoys = [];
+        magnets = []; xpBombs = [];
+        damageTexts = [];
+        bossSpawned = false;
+
+        startScreen.classList.add('hidden');
+        pauseButton.classList.remove('hidden');
+        
+        lastTime = performance.now();
+        animationFrameId = requestAnimationFrame(gameLoop);
     }
     
     // --- Event Listeners ---
+    startButton.addEventListener('click', startGame);
+    restartButton.addEventListener('click', resetGame);
+    pauseButton.addEventListener('click', togglePause);
     
-    function setupEventListeners() {
-        difficultySelection.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON' && e.target.dataset.difficulty) {
-                selectedDifficulty = e.target.dataset.difficulty;
-                Array.from(difficultySelection.children).forEach(child => child.classList.remove('selected'));
-                e.target.classList.add('selected');
-                updateStartButtonState();
-            }
-        });
-        
-        weaponSelection.addEventListener('click', (e) => {
-            if (e.target.tagName === 'BUTTON' && e.target.dataset.weapon) {
-                selectedWeapon = e.target.dataset.weapon;
-                Array.from(weaponSelection.children).forEach(child => child.classList.remove('selected'));
-                e.target.classList.add('selected');
-                updateStartButtonState();
-            }
-        });
+    resumeButton.addEventListener('click', togglePause);
+    restartPauseButton.addEventListener('click', resetGame);
+    quitButton.addEventListener('click', resetGame);
 
-        startButton.onclick = startGame;
-        restartButton.onclick = resetGame;
-        restartPauseButton.onclick = () => {
-             pauseScreen.classList.add('hidden');
-             startGame();
+    window.addEventListener('keydown', (e) => {
+        keysPressed[e.key.toLowerCase()] = true;
+        if (e.key === 'Escape') {
+            togglePause();
         }
-        resumeButton.onclick = togglePause;
-        pauseButton.onclick = togglePause;
-        quitButton.onclick = () => {
-            isPaused = false;
-            resetGame();
-        }
+    });
 
-        window.addEventListener('keydown', (e) => {
-            keysPressed[e.key.toLowerCase()] = true;
-            if (e.key === 'Escape') togglePause();
-        });
-        window.addEventListener('keyup', (e) => {
-            keysPressed[e.key.toLowerCase()] = false;
-        });
-
-        // Touch controls for joystick
-        let isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        if (isMobile) {
-            gameWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
-            gameWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
-            gameWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
-            gameWrapper.addEventListener('touchcancel', handleTouchEnd, { passive: false });
-        }
-    }
+    window.addEventListener('keyup', (e) => {
+        keysPressed[e.key.toLowerCase()] = false;
+    });
     
-    function handleTouchStart(e) {
-        e.preventDefault();
-        if (movementJoystickState.active) return;
-        
-        const touch = e.changedTouches[0];
-        movementJoystickState.touchId = touch.identifier;
-        movementJoystickState.active = true;
-        movementJoystickState.x = touch.clientX;
-        movementJoystickState.y = touch.clientY;
-
-        const rect = gameWrapper.getBoundingClientRect();
-        movementJoystickUI.style.left = `${touch.clientX - rect.left - JOYSTICK_BASE_RADIUS}px`;
-        movementJoystickUI.style.top = `${touch.clientY - rect.top - JOYSTICK_BASE_RADIUS}px`;
-        movementJoystickUI.classList.remove('hidden');
-        movementJoystickUI.classList.add('active');
-    }
-
-    function handleTouchMove(e) {
-        e.preventDefault();
-        if (!movementJoystickState.active) return;
-        
-        let touch = null;
-        for (let t of e.changedTouches) {
-            if (t.identifier === movementJoystickState.touchId) {
-                touch = t;
-                break;
-            }
+    difficultySelection.addEventListener('click', (e) => {
+        if (e.target.classList.contains('selection-button')) {
+            difficultySelection.querySelector('.selected')?.classList.remove('selected');
+            e.target.classList.add('selected');
+            selectedDifficulty = e.target.dataset.difficulty;
+            updateStartButtonState();
         }
-        if (!touch) return;
-        
-        let dx = touch.clientX - movementJoystickState.x;
-        let dy = touch.clientY - movementJoystickState.y;
-        const dist = Math.hypot(dx, dy);
+    });
 
-        if (dist > JOYSTICK_MAX_OFFSET) {
-            dx = (dx / dist) * JOYSTICK_MAX_OFFSET;
-            dy = (dy / dist) * JOYSTICK_MAX_OFFSET;
+    weaponSelection.addEventListener('click', (e) => {
+        if (e.target.classList.contains('selection-button')) {
+            weaponSelection.querySelector('.selected')?.classList.remove('selected');
+            e.target.classList.add('selected');
+            selectedWeapon = e.target.dataset.weapon;
+            updateStartButtonState();
         }
-        
-        movementJoystickHandle.style.transform = `translate(${dx}px, ${dy}px)`;
-
-        const moveDist = Math.hypot(dx, dy);
-        if (moveDist > JOYSTICK_DEAD_ZONE) {
-            movementJoystickState.dx = dx / JOYSTICK_MAX_OFFSET;
-            movementJoystickState.dy = dy / JOYSTICK_MAX_OFFSET;
-        } else {
-            movementJoystickState.dx = 0;
-            movementJoystickState.dy = 0;
-        }
-    }
-
-    function handleTouchEnd(e) {
-        e.preventDefault();
-        if (!movementJoystickState.active) return;
-
-        let touchEnded = false;
-        for (let t of e.changedTouches) {
-            if (t.identifier === movementJoystickState.touchId) {
-                touchEnded = true;
-                break;
-            }
-        }
-
-        if (touchEnded) {
-            movementJoystickState.active = false;
-            movementJoystickState.dx = 0;
-            movementJoystickState.dy = 0;
-            movementJoystickState.touchId = null;
-
-            movementJoystickUI.classList.add('hidden');
-            movementJoystickUI.classList.remove('active');
-            movementJoystickHandle.style.transform = 'translate(0, 0)';
-        }
-    }
+    });
     
-    // --- Initialization ---
-    function init() {
-        canvas.width = CANVAS_WIDTH;
-        canvas.height = CANVAS_HEIGHT;
-        updateHighscoreUI();
-        
-        selectedDifficulty = difficultySelection.querySelector('.selected')?.dataset.difficulty;
-        selectedWeapon = weaponSelection.querySelector('.selected')?.dataset.weapon;
-        
-        setupEventListeners();
-        updateStartButtonState();
+    // --- Touch Controls ---
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    
+    function handleJoystick(x, y, state) {
+        if (state.active) {
+            const dx = x - state.x;
+            const dy = y - state.y;
+            const distance = Math.hypot(dx, dy);
+            
+            const angle = Math.atan2(dy, dx);
+            const clampedDistance = Math.min(distance, JOYSTICK_MAX_OFFSET);
+            
+            movementJoystickHandle.style.transform = `translate(${Math.cos(angle) * clampedDistance}px, ${Math.sin(angle) * clampedDistance}px)`;
+            
+            if (distance > JOYSTICK_DEAD_ZONE) {
+                state.dx = Math.cos(angle);
+                state.dy = Math.sin(angle);
+            } else {
+                state.dx = 0;
+                state.dy = 0;
+            }
+        }
     }
 
-    init();
+    function getTouch(e, touchId) {
+        if (touchId === null) return e.changedTouches[0];
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === touchId) {
+                return e.changedTouches[i];
+            }
+        }
+        return null;
+    }
+
+    if (isMobile) {
+        gameWrapper.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.changedTouches[0];
+            
+            if (!movementJoystickState.active) {
+                movementJoystickState.active = true;
+                movementJoystickState.touchId = touch.identifier;
+                movementJoystickState.x = touch.clientX;
+                movementJoystickState.y = touch.clientY;
+                
+                movementJoystickUI.style.left = `${touch.clientX - JOYSTICK_BASE_RADIUS}px`;
+                movementJoystickUI.style.top = `${touch.clientY - JOYSTICK_BASE_RADIUS}px`;
+                movementJoystickUI.classList.remove('hidden');
+                movementJoystickUI.classList.add('active');
+            }
+        }, { passive: false });
+
+        gameWrapper.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (movementJoystickState.active) {
+                const touch = getTouch(e, movementJoystickState.touchId);
+                if (touch) {
+                    handleJoystick(touch.clientX, touch.clientY, movementJoystickState);
+                }
+            }
+        }, { passive: false });
+
+        gameWrapper.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const touch = getTouch(e, movementJoystickState.touchId);
+            
+            if (touch) {
+                movementJoystickState.active = false;
+                movementJoystickState.touchId = null;
+                movementJoystickState.dx = 0;
+                movementJoystickState.dy = 0;
+                movementJoystickHandle.style.transform = 'translate(0, 0)';
+                movementJoystickUI.classList.add('hidden');
+                movementJoystickUI.classList.remove('active');
+            }
+        }, { passive: false });
+    }
+
+    // Initial setup
+    resetGame();
 });
+
 </script>
 </body>
 </html>
