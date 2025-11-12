@@ -718,6 +718,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     projectile.target = enemies.length > 0 ? enemies[Math.floor(Math.random() * enemies.length)] : null;
                     projectile.bouncesLeft = weapon.bounces;
                     projectile.bounceRange = 150;
+                    projectile.hitEnemies = new Set();
                     if (!projectile.target) return;
                     break;
                  case 'black-hole-orb':
@@ -958,12 +959,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     const dist = Math.hypot(dx, dy);
                     if (dist < 10) {
                         takeDamage(proj.target, proj.damage);
+                        proj.hitEnemies.add(proj.target);
                         if (proj.bouncesLeft > 0) {
                             proj.bouncesLeft--;
                             let nextTarget = null;
                             let minDistance = proj.bounceRange;
                             enemies.forEach(e => {
-                                if (e !== proj.target && e.hp > 0) {
+                                if (!proj.hitEnemies.has(e) && e.hp > 0) {
                                     const d = Math.hypot(e.x - proj.target.x, e.y - proj.target.y);
                                     if (d < minDistance) {
                                         minDistance = d;
