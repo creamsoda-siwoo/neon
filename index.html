@@ -235,7 +235,7 @@
             <h2 class="text-xl mb-2 text-glow">난이도 선택</h2>
             <div id="difficulty-selection" class="grid grid-cols-3 gap-2 mb-4">
                 <button class="button-retro selection-button" data-difficulty="쉬움">쉬움</button>
-                <button class="button-retro selection-button selected" data-difficulty="보통">보통</button>
+                <button class="button-retro selection-button" data-difficulty="보통">보통</button>
                 <button class="button-retro selection-button" data-difficulty="어려움">어려움</button>
             </div>
           </div>
@@ -243,7 +243,7 @@
           <div class="w-full max-w-2xl mt-4">
               <h2 class="text-xl mb-2 text-glow">무기 선택</h2>
               <div id="weapon-selection" class="grid grid-cols-4 gap-2 mb-2">
-                  <button class="button-retro selection-button selected" data-weapon="machine-gun">기관총</button>
+                  <button class="button-retro selection-button" data-weapon="machine-gun">기관총</button>
                   <button class="button-retro selection-button" data-weapon="missile">유도 미사일</button>
                   <button class="button-retro selection-button" data-weapon="bomb">폭탄</button>
                   <button class="button-retro selection-button" data-weapon="laser">레이저</button>
@@ -440,6 +440,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let highScore = Number(localStorage.getItem('neonSurvivorHighScore') || 0);
     let comboCount, lastKillTime;
     let activeTouchCount = 0;
+    let nextEnemyId = 0;
     
     // Selection and Game-wide states
     let selectedDifficulty, selectedWeapon;
@@ -644,6 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const finalSpeed = base.speed * DIFFICULTY_SETTINGS[gameDifficulty].enemySpeedMult;
         
         enemies.push({ 
+            id: nextEnemyId++,
             ...base, 
             x, y, 
             hp: finalHp, 
@@ -651,6 +653,7 @@ document.addEventListener('DOMContentLoaded', () => {
             speed: finalSpeed, 
             lastActionTime: 0,
             slowTimer: 0,
+            slowAmount: 0,
             freezeTimer: 0,
             burnTimer: 0,
             burnDamage: 0
@@ -663,7 +666,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { x, y } = getSpawnPosition();
         const base = ENEMY_TYPES['boss'];
         const finalHp = base.hp * DIFFICULTY_SETTINGS[gameDifficulty].enemyHpMult;
-        enemies.push({ ...base, x, y, hp: finalHp, maxHp: finalHp, lastActionTime: 0 });
+        enemies.push({ ...base, id: nextEnemyId++, x, y, hp: finalHp, maxHp: finalHp, lastActionTime: 0 });
     }
     
     function shoot(targetX, targetY) {
@@ -744,6 +747,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     projectile.bounceRange = 200;
                     projectile.rotation = 0;
                     projectile.rotationSpeed = 15;
+                    projectile.hitEnemies = [];
                     break;
                 case 'vortex-orb':
                     projectile.vx = Math.cos(angle) * 120;
@@ -814,6 +818,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     function update(dt) {
+        if (!player || player.hp <= 0) return;
+
         // --- Player Movement ---
         let moveX = 0, moveY = 0;
         if (keysPressed['w'] || keysPressed['ArrowUp']) moveY = -1;
@@ -886,7 +892,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // --- Update Entities ---
 
         // Projectiles
-        projectiles.forEach((p, i) => {
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const p = projectiles[i];
             if (p.type === 'missile' && p.target && p.target.hp > 0) {
                 const angle = Math.atan2(p.target.y - p.y, p.target.x - p.x);
                 p.vx += Math.cos(angle) * 500 * dt;
@@ -915,7 +922,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else if (p.type === 'bomb') {
                          explosions.push({ x: p.x, y: p.y, radius: 0, maxRadius: 40, damage: p.damage });
                         // shrapnel
-                        for (let i = 0; i < p.shrapnelCount; i++) {
+                        for (let k = 0; k < p.shrapnelCount; k++) {
                             const angle = Math.random() * Math.PI * 2;
                             projectiles.push({
                                 x: p.x, y: p.y, type: 'bullet', damage: p.damage / 2,
@@ -929,10 +936,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 projectiles.splice(i, 1);
             }
-        });
+        }
 
         // Enemies
-        enemies.forEach((e, i) => {
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            const e = enemies[i];
             // Effects
             if (e.freezeTimer > 0) {
                 e.freezeTimer -= dt * 1000;
@@ -972,15 +980,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 } else if (e.action === 'summon') {
                     sounds.summon();
-                    for(let i = 0; i < 2; i++) {
+                    for(let k = 0; k < 2; k++) {
                         const grunt = ENEMY_TYPES['grunt'];
-                        enemies.push({ ...grunt, x: e.x + (Math.random() - 0.5) * 40, y: e.y + (Math.random() - 0.5) * 40, hp: grunt.hp * 0.5, speed: grunt.speed * 1.1 });
+                        enemies.push({ ...grunt, id: nextEnemyId++, x: e.x + (Math.random() - 0.5) * 40, y: e.y + (Math.random() - 0.5) * 40, hp: grunt.hp * 0.5, speed: grunt.speed * 1.1 });
                     }
                 }
             }
 
             // Projectile collision with enemy
-            projectiles.forEach((p, j) => {
+            for (let j = projectiles.length - 1; j >= 0; j--) {
+                const p = projectiles[j];
                  if (Math.hypot(p.x - e.x, p.y - e.y) < e.size / 2 + 5) {
                     let damage = p.damage;
                     let isCrit = false;
@@ -1012,10 +1021,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     
                     if (!p.pierce) {
                         if (p.type === 'ricochet-blade' && p.bouncesLeft > 0) {
+                            p.hitEnemies.push(e.id);
+                            p.bouncesLeft--;
                             let nextTarget = null;
                             let minDistance = Infinity;
                             enemies.forEach(otherEnemy => {
-                                if (otherEnemy !== e && !p.hitEnemies?.includes(otherEnemy.id)) {
+                                if (otherEnemy.hp > 0 && !p.hitEnemies.includes(otherEnemy.id)) {
                                     const dist = Math.hypot(e.x - otherEnemy.x, e.y - otherEnemy.y);
                                     if (dist < p.bounceRange && dist < minDistance) {
                                         minDistance = dist;
@@ -1024,13 +1035,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             });
                             if (nextTarget) {
-                                p.bouncesLeft--;
-                                p.hitEnemies = p.hitEnemies || [];
-                                p.hitEnemies.push(e.id);
-                                const angleToNext = Math.atan2(nextTarget.y - e.y, nextTarget.x - e.x);
-                                const speed = Math.hypot(p.vx, p.vy);
-                                p.vx = Math.cos(angleToNext) * speed;
-                                p.vy = Math.sin(angleToNext) * speed;
+                                const angle = Math.atan2(nextTarget.y - e.y, nextTarget.x - e.x);
+                                p.vx = Math.cos(angle) * 350;
+                                p.vy = Math.sin(angle) * 350;
                             } else {
                                 projectiles.splice(j, 1);
                             }
@@ -1039,50 +1046,29 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-            });
-            
-            if (e.hp <= 0) { // Enemy died
-                enemies.splice(i, 1);
-                xpGems.push({ x: e.x, y: e.y, value: e.xp, collected: false });
-                comboCount++;
-                lastKillTime = performance.now();
-                comboUI.textContent = `${comboCount} COMBO!`;
+            }
 
-                if(e.onDeath === 'explode') {
+            if (e.hp <= 0) {
+                 if (e.onDeath === 'explode') {
                     explosions.push({ x: e.x, y: e.y, radius: 0, maxRadius: 60, damage: e.damage });
                 }
-                
                 if (player.chainReactionChance > 0 && Math.random() < player.chainReactionChance) {
-                    explosions.push({ x: e.x, y: e.y, radius: 0, maxRadius: 80, damage: 30 });
+                    explosions.push({ x: e.x, y: e.y, radius: 0, maxRadius: 50, damage: 15 });
                 }
 
-                if (Math.random() < HEALTH_PACK_DROP_CHANCE) {
-                    healthPacks.push({ x: e.x, y: e.y, value: player.maxHp * 0.2, lifetime: 8000 });
-                }
+                xpGems.push({ x: e.x, y: e.y, value: e.xp, size: 5 + e.xp });
+                enemies.splice(i, 1);
+                lastKillTime = performance.now();
+                comboCount++;
+                comboUI.textContent = `${comboCount} COMBO`;
             }
-        });
+        }
         
-        // Enemy Projectiles
-        enemyProjectiles.forEach((p, i) => {
-            p.x += p.vx * dt;
-            p.y += p.vy * dt;
-            p.lifetime -= dt * 1000;
-            if (p.lifetime <= 0 || p.x < 0 || p.x > CANVAS_WIDTH || p.y < 0 || p.y > CANVAS_HEIGHT) {
-                enemyProjectiles.splice(i, 1);
-            }
-            if (Math.hypot(p.x - player.x, p.y - player.y) < PLAYER_SIZE / 2) {
-                takeDamage(player, p.damage);
-                enemyProjectiles.splice(i, 1);
-            }
-        });
-
         // XP Gems
-        xpGems.forEach((gem, i) => {
+        for (let i = xpGems.length - 1; i >= 0; i--) {
+            const gem = xpGems[i];
             const dist = Math.hypot(gem.x - player.x, gem.y - player.y);
             if (dist < player.pickupRadius) {
-                gem.collected = true;
-            }
-            if (gem.collected) {
                 const angle = Math.atan2(player.y - gem.y, player.x - gem.x);
                 gem.x += Math.cos(angle) * 400 * dt;
                 gem.y += Math.sin(angle) * 400 * dt;
@@ -1091,48 +1077,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     xpGems.splice(i, 1);
                 }
             }
-        });
-
-        // Health Packs
-        healthPacks.forEach((pack, i) => {
-            pack.lifetime -= dt * 1000;
-            if (pack.lifetime <= 0) {
-                healthPacks.splice(i, 1);
-                return;
-            }
-            const dist = Math.hypot(pack.x - player.x, pack.y - player.y);
-            if (dist < player.pickupRadius / 2) {
-                player.hp = Math.min(player.maxHp, player.hp + pack.value);
-                sounds.heal();
-                healthPacks.splice(i, 1);
-            }
-        });
+        }
         
         // Explosions
-        explosions.forEach((exp, i) => {
-            exp.radius += 300 * dt;
+        for (let i = explosions.length - 1; i >= 0; i--) {
+            const exp = explosions[i];
+            exp.radius += 200 * dt;
             if (exp.radius >= exp.maxRadius) {
-                explosions.splice(i, 1);
-                if (exp.damage > 0 && !exp.hasDamaged) {
+                if (!exp.hasDamaged) {
                     enemies.forEach(e => {
-                        if (Math.hypot(e.x - exp.x, e.y - exp.y) < exp.maxRadius) {
+                        if (Math.hypot(exp.x - e.x, exp.y - e.y) < exp.maxRadius) {
                             takeDamage(e, exp.damage);
-                            if (exp.burnDamage > 0) {
-                                e.burnTimer = exp.burnDuration;
-                                e.burnDamage = exp.burnDamage;
-                            }
                         }
                     });
-                    exp.hasDamaged = true; // Damage only once
+                    exp.hasDamaged = true;
                 }
+                explosions.splice(i, 1);
             }
-        });
+        }
 
-        // Update UI
+        // Damage Texts
+        for (let i = damageTexts.length - 1; i >= 0; i--) {
+            const dt = damageTexts[i];
+            dt.timer += 16;
+            dt.y -= 1;
+            dt.alpha -= 0.02;
+            if (dt.alpha <= 0) {
+                damageTexts.splice(i, 1);
+            }
+        }
+
+        // Update UI Bars
         hpBar.style.width = `${(player.hp / player.maxHp) * 100}%`;
         xpBar.style.width = `${(player.xp / player.xpToNextLevel) * 100}%`;
 
-        // Check for Game Over
+        // Check for game over
         if (player.hp <= 0) {
             gameOver();
         }
@@ -1140,360 +1119,287 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function draw() {
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        
-        const shakeX = (Math.random() - 0.5) * screenShake.magnitude;
-        const shakeY = (Math.random() - 0.5) * screenShake.magnitude;
         ctx.save();
-        ctx.translate(shakeX, shakeY);
-        
-        // Draw health packs
-        healthPacks.forEach(pack => {
-            ctx.save();
-            ctx.translate(pack.x, pack.y);
-            ctx.fillStyle = 'rgba(0, 255, 0, 0.7)';
-            ctx.shadowColor = '#0f0';
-            ctx.shadowBlur = 10;
-            ctx.fillRect(-8, -2, 16, 4);
-            ctx.fillRect(-2, -8, 4, 16);
-            ctx.restore();
-        });
+
+        if (screenShake.duration > 0) {
+            const dx = (Math.random() - 0.5) * screenShake.magnitude;
+            const dy = (Math.random() - 0.5) * screenShake.magnitude;
+            ctx.translate(dx, dy);
+            screenShake.duration -= 16; // Assuming 60fps
+        }
 
         // Draw XP Gems
         xpGems.forEach(gem => {
             ctx.fillStyle = '#00ffff';
-            ctx.shadowColor = '#00ffff';
-            ctx.shadowBlur = 10;
             ctx.beginPath();
-            ctx.arc(gem.x, gem.y, 4, 0, Math.PI * 2);
+            ctx.arc(gem.x, gem.y, gem.size / 2, 0, Math.PI * 2);
             ctx.fill();
         });
 
         // Draw Player
-        ctx.fillStyle = '#00ffff';
-        ctx.shadowColor = '#00ffff';
-        ctx.shadowBlur = 15;
+        ctx.fillStyle = '#ffffff';
         ctx.fillRect(player.x - PLAYER_SIZE / 2, player.y - PLAYER_SIZE / 2, PLAYER_SIZE, PLAYER_SIZE);
-
+        
         // Draw Player Shields
-        for (let i = 0; i < player.shields; i++) {
-            const angle = (performance.now() / 500) + (i * (Math.PI * 2 / player.shields));
-            const x = player.x + Math.cos(angle) * 40;
-            const y = player.y + Math.sin(angle) * 40;
-            ctx.fillStyle = '#ff00ff';
-            ctx.shadowColor = '#ff00ff';
-            ctx.beginPath();
-            ctx.arc(x, y, 8, 0, Math.PI * 2);
-            ctx.fill();
+        if (player.shields > 0) {
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2;
+            const angle = (performance.now() / 1000) * 2;
+            for (let i = 0; i < player.shields; i++) {
+                const shieldAngle = angle + (i * (Math.PI * 2 / player.shields));
+                const x = player.x + Math.cos(shieldAngle) * 40;
+                const y = player.y + Math.sin(shieldAngle) * 40;
+                ctx.beginPath();
+                ctx.arc(x, y, 8, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
+
 
         // Draw Enemies
         enemies.forEach(e => {
             ctx.fillStyle = e.color;
-            ctx.shadowColor = e.color;
-            ctx.shadowBlur = 10;
-            ctx.beginPath();
+            if (e.freezeTimer > 0) ctx.fillStyle = '#a0d2eb';
             if (e.shape === 'square') {
                 ctx.fillRect(e.x - e.size / 2, e.y - e.size / 2, e.size, e.size);
             } else if (e.shape === 'triangle') {
-                const angle = Math.atan2(player.y - e.y, player.x - e.x);
-                ctx.moveTo(e.x + Math.cos(angle) * e.size, e.y + Math.sin(angle) * e.size);
-                ctx.lineTo(e.x + Math.cos(angle + 2.2) * e.size / 2, e.y + Math.sin(angle + 2.2) * e.size / 2);
-                ctx.lineTo(e.x + Math.cos(angle - 2.2) * e.size / 2, e.y + Math.sin(angle - 2.2) * e.size / 2);
+                ctx.beginPath();
+                ctx.moveTo(e.x, e.y - e.size / 2);
+                ctx.lineTo(e.x - e.size / 2, e.y + e.size / 2);
+                ctx.lineTo(e.x + e.size / 2, e.y + e.size / 2);
                 ctx.closePath();
                 ctx.fill();
-            }
-            if (e.freezeTimer > 0) {
-                 ctx.strokeStyle = '#00f6ff';
-                 ctx.lineWidth = 3;
-                 ctx.strokeRect(e.x - e.size / 2 - 2, e.y - e.size / 2 - 2, e.size + 4, e.size + 4);
             }
         });
 
         // Draw Projectiles
-        ctx.shadowBlur = 10;
         projectiles.forEach(p => {
-             if (p.type === 'bullet') {
-                ctx.fillStyle = '#ffff00';
-                ctx.shadowColor = '#ffff00';
+             ctx.fillStyle = '#00ff00';
+             if (p.type === 'ricochet-blade') {
+                ctx.save();
+                ctx.translate(p.x, p.y);
+                ctx.rotate(p.rotation += p.rotationSpeed * (16/1000));
+                ctx.fillRect(-5, -5, 10, 10);
+                ctx.restore();
+            } else {
                 ctx.beginPath();
                 ctx.arc(p.x, p.y, p.size || 5, 0, Math.PI * 2);
                 ctx.fill();
-            } else if (p.type === 'laser') {
-                 ctx.strokeStyle = '#ff00ff';
-                 ctx.shadowColor = '#ff00ff';
-                 ctx.lineWidth = 4;
-                 ctx.beginPath();
-                 const angle = Math.atan2(p.vy, p.vx);
-                 ctx.moveTo(p.x - Math.cos(angle) * 20, p.y - Math.sin(angle) * 20);
-                 ctx.lineTo(p.x, p.y);
-                 ctx.stroke();
-            } else { // Generic circle for other types
-                ctx.fillStyle = '#ff9900';
-                ctx.shadowColor = '#ff9900';
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-                ctx.fill();
             }
-        });
-        
-        enemyProjectiles.forEach(p => {
-            ctx.fillStyle = '#ff0000';
-            ctx.shadowColor = '#ff0000';
-            ctx.beginPath();
-            ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
-            ctx.fill();
         });
         
         // Draw Explosions
         explosions.forEach(exp => {
-            ctx.fillStyle = `rgba(255, 255, 0, ${1 - (exp.radius / exp.maxRadius)})`;
+            ctx.fillStyle = `rgba(255, 165, 0, ${1 - exp.radius / exp.maxRadius})`;
             ctx.beginPath();
             ctx.arc(exp.x, exp.y, exp.radius, 0, Math.PI * 2);
             ctx.fill();
         });
-
-        // Draw Damage Text
-        damageTexts.forEach((dt, i) => {
-            ctx.fillStyle = `rgba(${dt.color}, ${dt.alpha})`;
-            ctx.font = dt.isCrit ? "bold 20px Orbitron" : "16px Orbitron";
-            ctx.textAlign = 'center';
-            ctx.fillText(dt.text, dt.x, dt.y - dt.timer * 30);
-            dt.timer += 1/60;
-            dt.alpha -= 1/60;
-            if (dt.alpha <= 0) {
-                damageTexts.splice(i, 1);
-            }
-        });
         
+        // Draw Damage Texts
+        damageTexts.forEach(dt => {
+            ctx.fillStyle = `rgba(${dt.color}, ${dt.alpha})`;
+            ctx.font = 'bold 16px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.fillText(dt.text, dt.x, dt.y);
+        });
+
         ctx.restore();
     }
-
-
+    
     function gameLoop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
         if (isPaused || gameState !== 'playing') return;
 
-        if (!lastTime) lastTime = timestamp;
         const dt = (timestamp - lastTime) / 1000;
         lastTime = timestamp;
-        
-        if (screenShake.duration > 0) {
-            screenShake.duration -= dt * 1000;
-        } else {
-            screenShake.magnitude = 0;
-        }
 
         update(dt);
         draw();
-        
+
         animationFrameId = requestAnimationFrame(gameLoop);
     }
 
     function gameOver() {
         gameState = 'gameover';
         cancelAnimationFrame(animationFrameId);
-        screenShake = { duration: 0, magnitude: 0 };
-        
-        gameOverTimeUI.textContent = `생존 시간: ${formatTime(gameTime)}`;
-        gameOverRankUI.textContent = `최종 랭크: ${getRank(gameTime).name}`;
-        gameOverHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
         gameOverScreen.classList.remove('hidden');
-        pauseButton.classList.add('hidden');
+        gameOverTimeUI.textContent = `생존 시간: ${formatTime(gameTime)}`;
+        const finalRank = getRank(gameTime);
+        gameOverRankUI.textContent = `달성 랭크: ${finalRank.name}`;
+        gameOverHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
     }
 
-    function resetGame() {
-        cancelAnimationFrame(animationFrameId);
-
-        gameState = 'start';
-        isPaused = false;
-        
-        // Reset game state variables
-        enemies = []; projectiles = []; enemyProjectiles = []; xpGems = []; healthPacks = []; nukes = []; explosions = [];
-        damageTexts = [];
-        screenShake = { duration: 0, magnitude: 0 };
-        gameTime = 0; lastTime = null;
-        lastSpawnTime = 0; spawnInterval = 1500;
-        bossSpawned = false;
-        keysPressed = {};
-        comboCount = 0; lastKillTime = 0;
-        
-        // Hide game screens, show start screen
-        pauseScreen.classList.add('hidden');
-        levelUpScreen.classList.add('hidden');
-        gameOverScreen.classList.add('hidden');
-        startScreen.classList.remove('hidden');
-        pauseButton.classList.add('hidden');
-        
-        // Reset UI
-        levelUI.textContent = '레벨: 1';
-        timerUI.textContent = '00:00';
-        comboUI.textContent = '';
-        currentRankUI.textContent = '';
-        hpBar.style.width = '100%';
-        xpBar.style.width = '0%';
-        
-        // Reset selections on start screen UI
-        document.querySelectorAll('#difficulty-selection .selection-button').forEach(btn => {
-            btn.classList.toggle('selected', btn.dataset.difficulty === '보통');
-        });
-        document.querySelectorAll('#weapon-selection .selection-button').forEach(btn => {
-            btn.classList.toggle('selected', btn.dataset.weapon === 'machine-gun');
-        });
-        selectedDifficulty = '보통';
-        selectedWeapon = 'machine-gun';
-        updateStartButtonState();
-        
-        highscoreUI.textContent = `최고기록: ${formatTime(highScore)}`;
-        startScreenHighscoreUI.textContent = `최고 기록: ${formatTime(highScore)}`;
-    }
-    
     function startGame() {
-        if (!selectedDifficulty || !selectedWeapon) return;
-
-        gameDifficulty = selectedDifficulty;
-
-        player = createInitialPlayer(selectedDifficulty, selectedWeapon);
-        
-        gameState = 'playing';
-        isPaused = false;
-        gameTime = 0;
-        lastSpawnTime = 0;
-        spawnInterval = 1500 * DIFFICULTY_SETTINGS[gameDifficulty].spawnRateMult;
-        
-        enemies = []; projectiles = []; enemyProjectiles = []; xpGems = []; healthPacks = []; nukes = []; explosions = [];
-        orbitalShields = []; speedBoosts = []; fireRateBoosts = []; freezeBombs = []; invincibilityShields = []; blackHoleItems = [];
-        drones = []; explosiveBarrels = []; blackHoles = []; vortexes = [];
-        holographicDecoys = []; decoys = [];
-        magnets = []; xpBombs = [];
-        damageTexts = [];
-        bossSpawned = false;
-
         startScreen.classList.add('hidden');
         pauseButton.classList.remove('hidden');
         
+        gameDifficulty = selectedDifficulty;
+        player = createInitialPlayer(selectedDifficulty, selectedWeapon);
+        
+        // Reset game entities
+        enemies = [];
+        projectiles = [];
+        enemyProjectiles = [];
+        xpGems = [];
+        healthPacks = [];
+        explosions = [];
+        damageTexts = [];
+        blackHoles = [];
+        
+        // Reset game state
+        gameTime = 0;
+        lastSpawnTime = 0;
+        spawnInterval = 2000;
+        bossSpawned = false;
+        comboCount = 0;
+        
+        gameState = 'playing';
+        isPaused = false;
         lastTime = performance.now();
         animationFrameId = requestAnimationFrame(gameLoop);
     }
     
+    function resetGame() {
+        startScreen.classList.remove('hidden');
+        pauseScreen.classList.add('hidden');
+        levelUpScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        pauseButton.classList.add('hidden');
+        
+        gameState = 'start';
+        isPaused = false;
+        gameTime = 0;
+        timerUI.textContent = "00:00";
+        currentRankUI.textContent = "";
+
+        // Set default selections and update UI
+        selectedDifficulty = '보통';
+        selectedWeapon = 'machine-gun';
+
+        difficultySelection.querySelectorAll('button').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.difficulty === selectedDifficulty);
+        });
+        weaponSelection.querySelectorAll('button').forEach(btn => {
+            btn.classList.toggle('selected', btn.dataset.weapon === selectedWeapon);
+        });
+
+        updateStartButtonState();
+    }
+
+    function updateUI() {
+        const formattedHighScore = formatTime(highScore);
+        highscoreUI.textContent = `최고기록: ${formattedHighScore}`;
+        startScreenHighscoreUI.textContent = `최고기록: ${formattedHighScore}`;
+    }
+
     // --- Event Listeners ---
+    
+    // Selection buttons
+    difficultySelection.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', () => {
+            selectedDifficulty = button.dataset.difficulty;
+            difficultySelection.querySelectorAll('button').forEach(btn => btn.classList.remove('selected'));
+            button.classList.add('selected');
+            updateStartButtonState();
+        });
+    });
+
+    weaponSelection.querySelectorAll('button').forEach(button => {
+        button.addEventListener('click', () => {
+            selectedWeapon = button.dataset.weapon;
+            weaponSelection.querySelectorAll('button').forEach(btn => btn.classList.remove('selected'));
+            button.classList.add('selected');
+            updateStartButtonState();
+        });
+    });
+
+    // Game state buttons
     startButton.addEventListener('click', startGame);
     restartButton.addEventListener('click', resetGame);
     pauseButton.addEventListener('click', togglePause);
-    
     resumeButton.addEventListener('click', togglePause);
-    restartPauseButton.addEventListener('click', resetGame);
+    restartPauseButton.addEventListener('click', () => {
+        resetGame();
+        startGame();
+    });
     quitButton.addEventListener('click', resetGame);
-
-    window.addEventListener('keydown', (e) => {
-        keysPressed[e.key.toLowerCase()] = true;
-        if (e.key === 'Escape') {
-            togglePause();
-        }
-    });
-
-    window.addEventListener('keyup', (e) => {
-        keysPressed[e.key.toLowerCase()] = false;
-    });
     
-    difficultySelection.addEventListener('click', (e) => {
-        if (e.target.classList.contains('selection-button')) {
-            difficultySelection.querySelector('.selected')?.classList.remove('selected');
-            e.target.classList.add('selected');
-            selectedDifficulty = e.target.dataset.difficulty;
-            updateStartButtonState();
-        }
-    });
+    // Keyboard controls
+    window.addEventListener('keydown', e => { keysPressed[e.key] = true; });
+    window.addEventListener('keyup', e => { keysPressed[e.key] = false; });
+    window.addEventListener('keydown', e => { if (e.key === 'Escape') togglePause(); });
 
-    weaponSelection.addEventListener('click', (e) => {
-        if (e.target.classList.contains('selection-button')) {
-            weaponSelection.querySelector('.selected')?.classList.remove('selected');
-            e.target.classList.add('selected');
-            selectedWeapon = e.target.dataset.weapon;
-            updateStartButtonState();
-        }
-    });
-    
     // --- Touch Controls ---
-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    
-    function handleJoystick(x, y, state) {
-        if (state.active) {
-            const dx = x - state.x;
-            const dy = y - state.y;
-            const distance = Math.hypot(dx, dy);
+    function handleTouchStart(e) {
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        if (!movementJoystickState.active) {
+            movementJoystickState.active = true;
+            movementJoystickState.touchId = touch.identifier;
+            movementJoystickState.x = touch.clientX;
+            movementJoystickState.y = touch.clientY;
             
-            const angle = Math.atan2(dy, dx);
-            const clampedDistance = Math.min(distance, JOYSTICK_MAX_OFFSET);
-            
-            movementJoystickHandle.style.transform = `translate(${Math.cos(angle) * clampedDistance}px, ${Math.sin(angle) * clampedDistance}px)`;
-            
-            if (distance > JOYSTICK_DEAD_ZONE) {
-                state.dx = Math.cos(angle);
-                state.dy = Math.sin(angle);
-            } else {
-                state.dx = 0;
-                state.dy = 0;
-            }
+            const rect = gameWrapper.getBoundingClientRect();
+            movementJoystickUI.style.left = `${touch.clientX - rect.left - JOYSTICK_BASE_RADIUS}px`;
+            movementJoystickUI.style.top = `${touch.clientY - rect.top - JOYSTICK_BASE_RADIUS}px`;
+            movementJoystickUI.classList.remove('hidden');
+            movementJoystickUI.classList.add('active');
         }
     }
 
-    function getTouch(e, touchId) {
-        if (touchId === null) return e.changedTouches[0];
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            if (e.changedTouches[i].identifier === touchId) {
-                return e.changedTouches[i];
-            }
+    function handleTouchMove(e) {
+        e.preventDefault();
+        if (!movementJoystickState.active) return;
+        
+        const touch = Array.from(e.changedTouches).find(t => t.identifier === movementJoystickState.touchId);
+        if (!touch) return;
+        
+        const dx = touch.clientX - movementJoystickState.x;
+        const dy = touch.clientY - movementJoystickState.y;
+        const distance = Math.hypot(dx, dy);
+        
+        const clampedDistance = Math.min(distance, JOYSTICK_MAX_OFFSET);
+        const angle = Math.atan2(dy, dx);
+        
+        const handleX = clampedDistance * Math.cos(angle);
+        const handleY = clampedDistance * Math.sin(angle);
+        
+        movementJoystickHandle.style.transform = `translate(${handleX}px, ${handleY}px)`;
+        
+        if (distance > JOYSTICK_DEAD_ZONE) {
+            movementJoystickState.dx = handleX / JOYSTICK_MAX_OFFSET;
+            movementJoystickState.dy = handleY / JOYSTICK_MAX_OFFSET;
+        } else {
+            movementJoystickState.dx = 0;
+            movementJoystickState.dy = 0;
         }
-        return null;
     }
 
-    if (isMobile) {
-        gameWrapper.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            const touch = e.changedTouches[0];
-            
-            if (!movementJoystickState.active) {
-                movementJoystickState.active = true;
-                movementJoystickState.touchId = touch.identifier;
-                movementJoystickState.x = touch.clientX;
-                movementJoystickState.y = touch.clientY;
-                
-                movementJoystickUI.style.left = `${touch.clientX - JOYSTICK_BASE_RADIUS}px`;
-                movementJoystickUI.style.top = `${touch.clientY - JOYSTICK_BASE_RADIUS}px`;
-                movementJoystickUI.classList.remove('hidden');
-                movementJoystickUI.classList.add('active');
-            }
-        }, { passive: false });
-
-        gameWrapper.addEventListener('touchmove', (e) => {
-            e.preventDefault();
-            if (movementJoystickState.active) {
-                const touch = getTouch(e, movementJoystickState.touchId);
-                if (touch) {
-                    handleJoystick(touch.clientX, touch.clientY, movementJoystickState);
-                }
-            }
-        }, { passive: false });
-
-        gameWrapper.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            const touch = getTouch(e, movementJoystickState.touchId);
-            
-            if (touch) {
-                movementJoystickState.active = false;
-                movementJoystickState.touchId = null;
-                movementJoystickState.dx = 0;
-                movementJoystickState.dy = 0;
-                movementJoystickHandle.style.transform = 'translate(0, 0)';
-                movementJoystickUI.classList.add('hidden');
-                movementJoystickUI.classList.remove('active');
-            }
-        }, { passive: false });
+    function handleTouchEnd(e) {
+        e.preventDefault();
+        const touch = Array.from(e.changedTouches).find(t => t.identifier === movementJoystickState.touchId);
+        if (touch) {
+            movementJoystickState.active = false;
+            movementJoystickState.touchId = null;
+            movementJoystickState.dx = 0;
+            movementJoystickState.dy = 0;
+            movementJoystickUI.classList.add('hidden');
+            movementJoystickUI.classList.remove('active');
+            movementJoystickHandle.style.transform = `translate(0px, 0px)`;
+        }
     }
 
-    // Initial setup
+    gameWrapper.addEventListener('touchstart', handleTouchStart, { passive: false });
+    gameWrapper.addEventListener('touchmove', handleTouchMove, { passive: false });
+    gameWrapper.addEventListener('touchend', handleTouchEnd, { passive: false });
+    gameWrapper.addEventListener('touchcancel', handleTouchEnd, { passive: false });
+
+    // --- Initialization ---
+    updateUI();
     resetGame();
 });
-
 </script>
+
 </body>
 </html>
