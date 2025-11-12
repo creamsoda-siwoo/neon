@@ -254,7 +254,7 @@
                   <button class="button-retro selection-button" data-weapon="ricochet-blade">리코</button>
                   <button class="button-retro selection-button" data-weapon="vortex-cannon">볼텍스 캐논</button>
                   <button class="button-retro selection-button" data-weapon="glitch-pulser">글리치 펄서</button>
-                  <button class="button-retro selection-button" data-weapon="cryo-blaster">크라이오 블래스터</button>
+                  <button class="button-retro selection-button" data-weapon="cryo-gun">크라이오건</button>
               </div>
           </div>
 
@@ -384,7 +384,7 @@ document.addEventListener('DOMContentLoaded', () => {
         'ricochet-blade': { fireRate: 750, damage: 20, projectileType: 'ricochet-blade', name: '리코셰 블레이드', bounces: 3, description: '적에게 튕기는 회전 칼날을 발사하여 최대 4명의 적을 공격합니다.' },
         'vortex-cannon': { fireRate: 2200, damage: 10, projectileType: 'vortex-orb', name: '볼텍스 캐논', description: '적을 끌어당기며 지속 피해를 주는 소용돌이를 생성하는 구체를 발사합니다.' },
         'glitch-pulser': { fireRate: 900, damage: 15, projectileType: 'glitch-pulse', name: '글리치 펄서', stunChance: 0.2, stunDuration: 1000, description: '짧은 거리의 적들을 관통하는 에너지 파동을 방출합니다. 피격된 적은 확률적으로 잠시 기절합니다.' },
-        'cryo-blaster': { fireRate: 850, damage: 18, projectileType: 'cryo-shard', name: '크라이오 블래스터', slowAmount: 0.4, slowDuration: 1500, freezeOnNthShot: 5, freezeDuration: 1000, description: '적을 느리게 만드는 얼음 파편을 발사합니다. 5번째 공격마다 적을 잠시 얼립니다.'}
+        'cryo-gun': { fireRate: 850, damage: 18, projectileType: 'cryo-shard', name: '크라이오건', slowAmount: 0.4, slowDuration: 1500, freezeOnNthShot: 5, freezeDuration: 1000, description: '적을 느리게 만드는 얼음 파편을 발사합니다. 5번째 공격마다 적을 잠시 얼립니다.'}
     };
    
     // --- Audio ---
@@ -482,6 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
             speedBoostTimer: 0, fireRateBoostTimer: 0, invincibilityTimer: 0, magnetTimer: 0,
             drones: 0,
             machineGunShotCount: 0,
+            cryoGunShotCount: 0,
             decoyCharges: 0,
             regeneration: 0,
             thornsDamage: 0,
@@ -756,12 +757,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     projectile.stunDuration = weapon.stunDuration;
                     break;
                 case 'cryo-shard':
-                    player.machineGunShotCount = (player.machineGunShotCount || 0) + 1;
+                    player.cryoGunShotCount = (player.cryoGunShotCount || 0) + 1;
                     projectile.vx = Math.cos(angle) * 400;
                     projectile.vy = Math.sin(angle) * 400;
                     projectile.slowAmount = weapon.slowAmount;
                     projectile.slowDuration = weapon.slowDuration;
-                    if (player.machineGunShotCount % weapon.freezeOnNthShot === 0) {
+                    if (player.cryoGunShotCount % weapon.freezeOnNthShot === 0) {
                         projectile.shouldFreeze = true;
                         projectile.freezeDuration = weapon.freezeDuration;
                     }
@@ -985,9 +986,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (proj.type === 'black-hole-orb' || proj.type === 'vortex-orb') {
                     proj.x += proj.vx * deltaTime;
                     proj.y += proj.vy * deltaTime;
-                    if (proj.lifetime < 10) {
+                    if (proj.lifetime < 10 && !proj.triggered) {
+                        proj.triggered = true;
                         if (proj.type === 'black-hole-orb') {
-                            blackHoles.push({ x: proj.x, y: proj.y, radius: 10, maxRadius: 120, lifetime: 5000, pullForce: 250, damage: 15 });
+                            blackHoles.push({ x: proj.x, y: proj.y, radius: 10, maxRadius: 96, lifetime: 5000, pullForce: 250, damage: 15 });
+                            sounds.blackHole();
                         } else { // vortex-orb
                             vortexes.push({ x: proj.x, y: proj.y, radius: 10, maxRadius: 100, lifetime: 4000, pullForce: 300, damage: 10, rotation: 0 });
                         }
@@ -1060,6 +1063,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
                             if(proj.stunChance && Math.random() < proj.stunChance) {
                                 enemy.stunTimer = proj.stunDuration;
+                            }
+                            
+                            if (proj.type === 'black-hole-orb' || proj.type === 'vortex-orb' || proj.type === 'bomb') {
+                                proj.lifetime = 1; // Trigger end-of-life effect on next frame
                             }
 
                             if (proj.explosive) {
@@ -1863,6 +1870,13 @@ document.addEventListener('DOMContentLoaded', () => {
         gameWrapper.addEventListener('touchcancel', handleTouchEnd, { passive: false });
     }
     
+    // Auto-pause when window loses focus
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && gameState === 'playing' && !isPaused) {
+            togglePause();
+        }
+    });
+
     // --- Game Initialization ---
     selectedDifficulty = difficultySelection.querySelector('.selected').dataset.difficulty;
     const defaultWeaponButton = weaponSelection.querySelector('.selected');
