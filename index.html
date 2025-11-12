@@ -225,10 +225,6 @@
         <div class="joystick-base"></div>
         <div class="joystick-handle"></div>
       </div>
-      <div id="attack-joystick" class="joystick hidden">
-        <div class="joystick-base"></div>
-        <div class="joystick-handle"></div>
-      </div>
       
       <div id="start-screen" class="overlay">
           <div class="absolute top-4 left-4 text-xs text-gray-500">제작자: 한국인이라면</div>
@@ -430,14 +426,14 @@ document.addEventListener('DOMContentLoaded', () => {
     let gameState = 'start';
     let isPaused = false;
     let selectedDifficulty, selectedWeapon;
-    let player, enemies, projectiles, enemyProjectiles, xpGems, healthPacks, nukes, explosions;
+    let player, enemies, projectiles, enemyProjectiles, xpGems, itemPickups, explosions;
     let orbitalShields, speedBoosts, fireRateBoosts, freezeBombs, invincibilityShields, blackHoleItems;
     let drones, explosiveBarrels, blackHoles, vortexes;
     let holographicDecoys, decoys;
     let magnets, xpBombs;
-    let damageTexts;
+    let damageTexts, nukeEffect;
     let timer, gameTime, lastTime, animationFrameId;
-    let lastSpawnTime, spawnInterval;
+    let lastSpawnTime, spawnInterval, lastItemSpawnTime, itemSpawnInterval;
     let bossSpawned, enemiesFrozen, enemiesFrozenTimer;
     let mousePos = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
     let keysPressed = {};
@@ -517,6 +513,8 @@ document.addEventListener('DOMContentLoaded', () => {
         levelUpScreen.classList.add('hidden');
         isPaused = false;
         gameState = 'playing';
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
     }
 
     function levelUp() {
@@ -644,6 +642,14 @@ document.addEventListener('DOMContentLoaded', () => {
             burnTimer: 0,
             burnDamage: 0
         });
+    }
+    
+    function spawnItem() {
+        const ITEM_TYPES = ['health', 'speed', 'firerate', 'invincibility', 'magnet', 'nuke'];
+        const type = ITEM_TYPES[Math.floor(Math.random() * ITEM_TYPES.length)];
+        const x = Math.random() * (CANVAS_WIDTH - 60) + 30;
+        const y = Math.random() * (CANVAS_HEIGHT - 60) + 30;
+        itemPickups.push({ x, y, type, lifetime: 10000 });
     }
 
     function spawnBoss() {
@@ -777,6 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function createExplosion(x, y, radius, damage) {
+        if (radius <= 0) return;
         explosions.push({ x, y, radius, maxRadius: radius, duration: 200, timer: 0, damage: damage });
         sounds.explosion();
         // Screen shake
@@ -793,6 +800,26 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function updatePlayer(deltaTime) {
         if (player.isDashing) return;
+
+        // Base stats
+        player.speed = player.baseSpeed;
+        player.fireRate = player.baseFireRate;
+
+        // Apply boosts
+        if (player.speedBoostTimer > 0) {
+            player.speedBoostTimer -= deltaTime * 1000;
+            player.speed *= 1.5;
+        }
+        if (player.fireRateBoostTimer > 0) {
+            player.fireRateBoostTimer -= deltaTime * 1000;
+            player.fireRate *= 0.5;
+        }
+        if (player.invincibilityTimer > 0) {
+            player.invincibilityTimer -= deltaTime * 1000;
+        }
+        if (player.magnetTimer > 0) {
+            player.magnetTimer -= deltaTime * 1000;
+        }
 
         // Movement
         let dx = 0;
@@ -832,22 +859,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (closestEnemy) {
             shoot(closestEnemy.x, closestEnemy.y);
-        }
-        
-        // Boost Timers
-        if (player.speedBoostTimer > 0) {
-            player.speedBoostTimer -= deltaTime * 1000;
-            if(player.speedBoostTimer <= 0) player.speed = player.baseSpeed;
-        }
-        if (player.fireRateBoostTimer > 0) {
-            player.fireRateBoostTimer -= deltaTime * 1000;
-            if(player.fireRateBoostTimer <= 0) player.fireRate = player.baseFireRate;
-        }
-        if (player.invincibilityTimer > 0) {
-            player.invincibilityTimer -= deltaTime * 1000;
-        }
-        if (player.magnetTimer > 0) {
-            player.magnetTimer -= deltaTime * 1000;
         }
         
         // Regeneration
@@ -1099,6 +1110,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+    
+    function applyItemEffect(type) {
+        sounds.powerup();
+        switch (type) {
+            case 'health':
+                player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.25);
+                sounds.heal();
+                break;
+            case 'speed':
+                player.speedBoostTimer = 5000;
+                break;
+            case 'firerate':
+                player.fireRateBoostTimer = 5000;
+                break;
+            case 'invincibility':
+                player.invincibilityTimer = 5000;
+                sounds.shieldUp();
+                break;
+            case 'magnet':
+                player.magnetTimer = 8000;
+                break;
+            case 'nuke':
+                enemies.forEach(enemy => {
+                    xpGems.push({ x: enemy.x, y: enemy.y, value: enemy.xp });
+                });
+                enemies.length = 0;
+                nukeEffect = { timer: 500, duration: 500 };
+                sounds.nuke();
+                break;
+        }
+    }
 
     function updateItems(deltaTime) {
         // XP Gems
@@ -1117,6 +1159,22 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dist < PLAYER_SIZE / 2) {
                 collectXP(gem.value);
                 xpGems.splice(i, 1);
+            }
+        }
+        
+        // Item Pickups
+        for (let i = itemPickups.length - 1; i >= 0; i--) {
+            const item = itemPickups[i];
+            item.lifetime -= deltaTime * 1000;
+            if (item.lifetime <= 0) {
+                itemPickups.splice(i, 1);
+                continue;
+            }
+            
+            const dist = Math.hypot(player.x - item.x, player.y - item.y);
+            if (dist < PLAYER_SIZE / 2 + 15) {
+                applyItemEffect(item.type);
+                itemPickups.splice(i, 1);
             }
         }
     }
@@ -1221,9 +1279,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawPlayer() {
         ctx.save();
+        // Invincibility flicker
         if (player.invincibilityTimer > 0) {
             ctx.globalAlpha = 0.5 + Math.sin(performance.now() / 50) * 0.2;
         }
+
+        // Boost auras
+        if (player.speedBoostTimer > 0) {
+             ctx.fillStyle = 'rgba(255, 255, 0, 0.3)';
+             ctx.shadowColor = '#ff0';
+             ctx.shadowBlur = 20;
+             ctx.beginPath();
+             ctx.arc(player.x, player.y, PLAYER_SIZE, 0, Math.PI * 2);
+             ctx.fill();
+        }
+        if (player.fireRateBoostTimer > 0) {
+             ctx.fillStyle = 'rgba(0, 255, 255, 0.3)';
+             ctx.shadowColor = '#0ff';
+             ctx.shadowBlur = 20;
+             ctx.beginPath();
+             ctx.arc(player.x, player.y, PLAYER_SIZE * 1.2, 0, Math.PI * 2);
+             ctx.fill();
+        }
+
         ctx.fillStyle = '#00ffff';
         ctx.shadowColor = '#00ffff';
         ctx.shadowBlur = 15;
@@ -1346,6 +1424,55 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.fill();
             ctx.restore();
         });
+        
+        // Pickups
+        itemPickups.forEach(item => {
+            ctx.save();
+            ctx.globalAlpha = item.lifetime < 1000 ? (item.lifetime / 1000) : 1;
+            ctx.font = 'bold 20px Orbitron';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            switch (item.type) {
+                case 'health':
+                    ctx.fillStyle = '#0f0';
+                    ctx.shadowColor = '#0f0';
+                    ctx.shadowBlur = 15;
+                    ctx.fillText('+', item.x, item.y);
+                    break;
+                case 'speed':
+                    ctx.fillStyle = '#ff0';
+                    ctx.shadowColor = '#ff0';
+                    ctx.shadowBlur = 15;
+                    ctx.fillText('⚡', item.x, item.y);
+                    break;
+                case 'firerate':
+                    ctx.fillStyle = '#0ff';
+                    ctx.shadowColor = '#0ff';
+                    ctx.shadowBlur = 15;
+                    ctx.fillText('🌀', item.x, item.y);
+                    break;
+                case 'invincibility':
+                    ctx.fillStyle = '#f0f';
+                    ctx.shadowColor = '#f0f';
+                    ctx.shadowBlur = 15;
+                    ctx.fillText('✨', item.x, item.y);
+                    break;
+                case 'magnet':
+                    ctx.fillStyle = '#4d4dff';
+                    ctx.shadowColor = '#4d4dff';
+                    ctx.shadowBlur = 15;
+                    ctx.fillText('🧲', item.x, item.y);
+                    break;
+                case 'nuke':
+                    ctx.fillStyle = '#f00';
+                    ctx.shadowColor = '#f00';
+                    ctx.shadowBlur = 15;
+                    ctx.fillText('☢️', item.x, item.y);
+                    break;
+            }
+            ctx.restore();
+        });
     }
 
     function drawEffects(deltaTime) {
@@ -1353,6 +1480,12 @@ document.addEventListener('DOMContentLoaded', () => {
         for (let i = explosions.length - 1; i >= 0; i--) {
             const exp = explosions[i];
             exp.timer += deltaTime * 1000;
+
+            if (exp.timer >= exp.duration) {
+                explosions.splice(i, 1);
+                continue;
+            }
+
             const progress = exp.timer / exp.duration;
             const currentRadius = exp.maxRadius * Math.sin(progress * Math.PI);
             
@@ -1364,10 +1497,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.shadowBlur = 20;
             ctx.fill();
             ctx.restore();
-
-            if (progress >= 1) {
-                explosions.splice(i, 1);
-            }
         }
         
         // Damage texts
@@ -1385,6 +1514,16 @@ document.addEventListener('DOMContentLoaded', () => {
             ctx.restore();
             
             if(dt.alpha <= 0) damageTexts.splice(i, 1);
+        }
+        
+        // Nuke Effect
+        if (nukeEffect && nukeEffect.timer > 0) {
+            nukeEffect.timer -= deltaTime * 1000;
+            const progress = nukeEffect.timer / nukeEffect.duration;
+            ctx.save();
+            ctx.fillStyle = `rgba(255, 255, 255, ${progress})`;
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.restore();
         }
         
         // Black Holes
@@ -1456,15 +1595,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Game Loop ---
 
     function gameLoop(currentTime) {
-        if (gameState !== 'playing' && gameState !== 'levelup') {
-            return;
-        }
-
+        if (!lastTime) lastTime = currentTime;
         const deltaTime = (currentTime - lastTime) / 1000;
         lastTime = currentTime;
     
         if (isPaused || gameState === 'levelup') {
             requestAnimationFrame(gameLoop);
+            return;
+        }
+
+        if (gameState !== 'playing') {
             return;
         }
         
@@ -1491,6 +1631,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             lastSpawnTime = 0;
             spawnInterval = Math.max(200, 2000 * (1 - gameTime / 300) * DIFFICULTY_SETTINGS[selectedDifficulty].spawnRateMult);
+        }
+
+        lastItemSpawnTime += deltaTime * 1000;
+        if (lastItemSpawnTime > itemSpawnInterval) {
+            spawnItem();
+            lastItemSpawnTime = 0;
+            itemSpawnInterval = 10000 + Math.random() * 5000; // 10-15 seconds
         }
 
         if (gameTime > 300 && !bossSpawned) {
@@ -1536,10 +1683,12 @@ document.addEventListener('DOMContentLoaded', () => {
         projectiles = [];
         enemyProjectiles = [];
         xpGems = [];
+        itemPickups = [];
         explosions = [];
         damageTexts = [];
         blackHoles = [];
         vortexes = [];
+        nukeEffect = null;
         
         player = createInitialPlayer(selectedDifficulty, selectedWeapon);
         
@@ -1547,6 +1696,8 @@ document.addEventListener('DOMContentLoaded', () => {
         bossSpawned = false;
         lastSpawnTime = 0;
         spawnInterval = 2000 * DIFFICULTY_SETTINGS[selectedDifficulty].spawnRateMult;
+        lastItemSpawnTime = 0;
+        itemSpawnInterval = 10000;
         comboCount = 0;
         lastKillTime = performance.now();
         availableUpgrades = [...UPGRADES];
@@ -1565,16 +1716,18 @@ document.addEventListener('DOMContentLoaded', () => {
         gameState = 'playing';
         
         lastTime = performance.now();
-        requestAnimationFrame(gameLoop);
+        animationFrameId = requestAnimationFrame(gameLoop);
     }
     
     function restartGame() {
+        cancelAnimationFrame(animationFrameId);
         gameOverScreen.classList.add('hidden');
         pauseScreen.classList.add('hidden');
         startGame();
     }
 
     function quitToMenu() {
+        cancelAnimationFrame(animationFrameId);
         gameState = 'start';
         isPaused = false;
         pauseScreen.classList.add('hidden');
@@ -1591,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
     resumeButton.addEventListener('click', togglePause);
     restartPauseButton.addEventListener('click', () => {
         pauseScreen.classList.add('hidden');
-        startGame();
+        restartGame();
     });
     quitButton.addEventListener('click', quitToMenu);
 
@@ -1635,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const isMobile = 'ontouchstart' in window;
     if (isMobile) {
         function getTouchPos(touch) {
-            const rect = canvas.getBoundingClientRect();
+            const rect = gameWrapper.getBoundingClientRect();
             return {
                 x: touch.clientX - rect.left,
                 y: touch.clientY - rect.top,
