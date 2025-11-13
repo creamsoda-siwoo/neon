@@ -1805,7 +1805,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function handleTouchStart(e) {
-            if (gameState !== 'playing') return;
+            if (gameState !== 'playing' || isPaused) return;
             e.preventDefault();
             for (const touch of e.changedTouches) {
                 // Only activate if not already active. This will handle the first touch.
@@ -1825,7 +1825,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         function handleTouchMove(e) {
-            if (gameState !== 'playing') return;
+            if (gameState !== 'playing' || isPaused) return;
             e.preventDefault();
             for (const touch of e.changedTouches) {
                 if (touch.identifier === movementJoystickState.touchId) {
@@ -1851,7 +1851,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         function handleTouchEnd(e) {
-            if (gameState !== 'playing') return;
+            if (gameState !== 'playing' || isPaused) return;
             e.preventDefault();
             for (const touch of e.changedTouches) {
                 if (touch.identifier === movementJoystickState.touchId) {
